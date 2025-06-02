@@ -33,6 +33,7 @@
 		3C8BF39E2DEC8C730029F770 /* ChatComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C8BF39D2DEC8C5D0029F770 /* ChatComponent.swift */; };
 		3CBB48C12DEDBA4C00A288A3 /* Networking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBB48C02DEDBA4900A288A3 /* Networking.swift */; };
 		3CBB48C52DEDBA9C00A288A3 /* SpeechToTextModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBB48C42DEDBA9400A288A3 /* SpeechToTextModel.swift */; };
+		3CBB48C92DEDCAEA00A288A3 /* RealtimeResponseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBB48C82DEDCAE000A288A3 /* RealtimeResponseModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +65,7 @@
 		3C8BF39D2DEC8C5D0029F770 /* ChatComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComponent.swift; sourceTree = "<group>"; };
 		3CBB48C02DEDBA4900A288A3 /* Networking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Networking.swift; sourceTree = "<group>"; };
 		3CBB48C42DEDBA9400A288A3 /* SpeechToTextModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechToTextModel.swift; sourceTree = "<group>"; };
+		3CBB48C82DEDCAE000A288A3 /* RealtimeResponseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeResponseModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -210,6 +212,7 @@
 		3CBB48C32DEDBA6E00A288A3 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				3CBB48C82DEDCAE000A288A3 /* RealtimeResponseModel.swift */,
 				3CBB48C42DEDBA9400A288A3 /* SpeechToTextModel.swift */,
 			);
 			path = Models;
@@ -292,6 +295,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3C8BF39C2DEC8AAB0029F770 /* ChatVC.swift in Sources */,
+				3CBB48C92DEDCAEA00A288A3 /* RealtimeResponseModel.swift in Sources */,
 				3C4270D42DECB34800AA34D9 /* TopChatComponent.swift in Sources */,
 				3C11AAB02DEC54F600521233 /* OnboardingPageVC.swift in Sources */,
 				3C4270D72DECB6DD00AA34D9 /* SegmentControlComponent.swift in Sources */,

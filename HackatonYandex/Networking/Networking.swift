@@ -61,4 +61,68 @@ class Networking {
         
         task.resume()
     }
+    
+    /// Начать запись в реальном времени
+    func startRealtimeRecording(completion: @escaping (Result<RealtimeResponseModel, Error>) -> Void) {
+        let url = URL(string: "http://127.0.0.1:8000/api/realtime/start")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(NSError(domain: "No data", code: 0)))
+                return
+            }
+            
+            do {
+                let response = try JSONDecoder().decode(RealtimeResponseModel.self, from: data)
+                completion(.success(response))
+            } catch {
+                print("Decode error: \(error.localizedDescription)")
+                if let raw = String(data: data, encoding: .utf8) {
+                    print("Raw response: \(raw)")
+                }
+                completion(.failure(error))
+            }
+        }
+        
+        task.resume()
+    }
+    
+    /// Остановить запись в реальном времени
+    func stopRealtimeRecording(completion: @escaping (Result<RealtimeResponseModel, Error>) -> Void) {
+        let url = URL(string: "http://127.0.0.1:8000/api/realtime/stop")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(NSError(domain: "No data", code: 0)))
+                return
+            }
+            
+            do {
+                let response = try JSONDecoder().decode(RealtimeResponseModel.self, from: data)
+                completion(.success(response))
+            } catch {
+                print("Decode error: \(error.localizedDescription)")
+                if let raw = String(data: data, encoding: .utf8) {
+                    print("Raw response: \(raw)")
+                }
+                completion(.failure(error))
+            }
+        }
+        
+        task.resume()
+    }
 }
