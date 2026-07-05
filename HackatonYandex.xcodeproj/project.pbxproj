@@ -48,6 +48,10 @@
 		4D100001000000000000000E /* RemoteSpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000000E /* RemoteSpeechRecognitionService.swift */; };
 		4D100001000000000000000F /* DefaultTextToSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000000F /* DefaultTextToSpeechService.swift */; };
 		4D1000010000000000000010 /* DefaultMicrophonePermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000010 /* DefaultMicrophonePermissionService.swift */; };
+		4D1000010000000000000011 /* CoreDataStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000011 /* CoreDataStack.swift */; };
+		4D1000010000000000000012 /* CoreDataConversationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000012 /* CoreDataConversationRepository.swift */; };
+		4D1000010000000000000013 /* ConversationUseCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000013 /* ConversationUseCases.swift */; };
+		4D1000010000000000000014 /* HistoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000014 /* HistoryViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -94,6 +98,10 @@
 		4D200001000000000000000E /* RemoteSpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSpeechRecognitionService.swift; sourceTree = "<group>"; };
 		4D200001000000000000000F /* DefaultTextToSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultTextToSpeechService.swift; sourceTree = "<group>"; };
 		4D2000010000000000000010 /* DefaultMicrophonePermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultMicrophonePermissionService.swift; sourceTree = "<group>"; };
+		4D2000010000000000000011 /* CoreDataStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStack.swift; sourceTree = "<group>"; };
+		4D2000010000000000000012 /* CoreDataConversationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataConversationRepository.swift; sourceTree = "<group>"; };
+		4D2000010000000000000013 /* ConversationUseCases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationUseCases.swift; sourceTree = "<group>"; };
+		4D2000010000000000000014 /* HistoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,7 +190,9 @@
 			isa = PBXGroup;
 			children = (
 				4D300001000000000000000E /* Audio */,
+				4D3000010000000000000011 /* LocalStorage */,
 				3CBB48C22DEDBA5400A288A3 /* Network */,
+				4D3000010000000000000012 /* Repositories */,
 				4D300001000000000000000F /* Speech */,
 			);
 			path = Data;
@@ -206,6 +216,22 @@
 			path = Speech;
 			sourceTree = "<group>";
 		};
+		4D3000010000000000000011 /* LocalStorage */ = {
+			isa = PBXGroup;
+			children = (
+				4D2000010000000000000011 /* CoreDataStack.swift */,
+			);
+			path = LocalStorage;
+			sourceTree = "<group>";
+		};
+		4D3000010000000000000012 /* Repositories */ = {
+			isa = PBXGroup;
+			children = (
+				4D2000010000000000000012 /* CoreDataConversationRepository.swift */,
+			);
+			path = Repositories;
+			sourceTree = "<group>";
+		};
 		4D3000010000000000000005 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
@@ -221,6 +247,7 @@
 				4D3000010000000000000007 /* Entities */,
 				4D3000010000000000000008 /* RepositoryProtocols */,
 				4D3000010000000000000010 /* Services */,
+				4D3000010000000000000013 /* UseCases */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -249,10 +276,19 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		4D3000010000000000000013 /* UseCases */ = {
+			isa = PBXGroup;
+			children = (
+				4D2000010000000000000013 /* ConversationUseCases.swift */,
+			);
+			path = UseCases;
+			sourceTree = "<group>";
+		};
 		4D3000010000000000000009 /* Presentation */ = {
 			isa = PBXGroup;
 			children = (
 				4D300001000000000000000C /* Conversation */,
+				4D3000010000000000000014 /* History */,
 				4D300001000000000000000A /* Phrases */,
 				4D300001000000000000000B /* Settings */,
 			);
@@ -265,6 +301,14 @@
 				4D200001000000000000000B /* ConversationPresenter.swift */,
 			);
 			path = Conversation;
+			sourceTree = "<group>";
+		};
+		4D3000010000000000000014 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				4D2000010000000000000014 /* HistoryViewController.swift */,
+			);
+			path = History;
 			sourceTree = "<group>";
 		};
 		4D300001000000000000000A /* Phrases */ = {
@@ -476,9 +520,11 @@
 				4D100001000000000000000B /* ConversationPresenter.swift in Sources */,
 				4D100001000000000000000C /* SpeechServices.swift in Sources */,
 				3C4270D92DECB96900AA34D9 /* ChatVCExtension.swift in Sources */,
+				4D1000010000000000000014 /* HistoryViewController.swift in Sources */,
 				3C11AAAC2DEC53CF00521233 /* OnboardingPageModel.swift in Sources */,
 				4D1000010000000000000002 /* AppContainer.swift in Sources */,
 				3C8BF39E2DEC8C730029F770 /* ChatComponent.swift in Sources */,
+				4D1000010000000000000011 /* CoreDataStack.swift in Sources */,
 				3C4270DF2DECBEC100AA34D9 /* StartTypingHint.swift in Sources */,
 				4D1000010000000000000004 /* AppLogger.swift in Sources */,
 				3CBB48C12DEDBA4C00A288A3 /* APIClient.swift in Sources */,
@@ -489,6 +535,7 @@
 				3C8BF3972DEC83AC0029F770 /* TabBarController.swift in Sources */,
 				3C11AAA82DEC483300521233 /* SceneDelegate.swift in Sources */,
 				4D1000010000000000000005 /* Coordinator.swift in Sources */,
+				4D1000010000000000000013 /* ConversationUseCases.swift in Sources */,
 				3C728F3F2DED2CC2007F9AC4 /* ChatVC+Keyboard.swift in Sources */,
 				3C4270DD2DECBBC600AA34D9 /* ListenViewController.swift in Sources */,
 				3C4270EA2DED13B300AA34D9 /* TabBarController+Extension.swift in Sources */,
@@ -497,6 +544,7 @@
 				4D1000010000000000000003 /* AppError.swift in Sources */,
 				3C4270E72DED00AC00AA34D9 /* MicroEnabledView.swift in Sources */,
 				4D100001000000000000000E /* RemoteSpeechRecognitionService.swift in Sources */,
+				4D1000010000000000000012 /* CoreDataConversationRepository.swift in Sources */,
 				4D1000010000000000000006 /* AppCoordinator.swift in Sources */,
 				4D1000010000000000000008 /* RepositoryProtocols.swift in Sources */,
 				3C4270DB2DECBBB400AA34D9 /* TalkViewController.swift in Sources */,

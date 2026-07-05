@@ -21,7 +21,9 @@ class ChatVC: UIViewController {
         view: self,
         microphonePermissionService: container.microphonePermissionService,
         audioRecordingService: container.audioRecordingService,
-        speechRecognitionService: container.speechRecognitionService
+        speechRecognitionService: container.speechRecognitionService,
+        saveConversationUseCase: container.saveConversationUseCase,
+        addConversationMessageUseCase: container.addConversationMessageUseCase
     )
     
     var typingHint: StartTypingHint?
@@ -59,6 +61,7 @@ class ChatVC: UIViewController {
         setupSegmentControlComponent()
         setupChatComponent()
         setupContainerView()
+        setupTopActions()
         
         segmentControlComponent.delegate = self
         talkVC.delegate = self
@@ -84,6 +87,11 @@ class ChatVC: UIViewController {
             topChatComponent.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             topChatComponent.heightAnchor.constraint(equalToConstant: 56)
         ])
+    }
+
+    private func setupTopActions() {
+        topChatComponent.leftNavButton.addTarget(self, action: #selector(historyTapped), for: .touchUpInside)
+        topChatComponent.leftNavButton.accessibilityLabel = "Открыть историю разговоров"
     }
     
     private func setupSegmentControlComponent() {
@@ -180,5 +188,14 @@ class ChatVC: UIViewController {
     
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+    }
+
+    @objc private func historyTapped() {
+        view.endEditing(true)
+
+        let historyVC = HistoryViewController(container: container)
+        let navigationController = UINavigationController(rootViewController: historyVC)
+        navigationController.modalPresentationStyle = .fullScreen
+        present(navigationController, animated: true)
     }
 }

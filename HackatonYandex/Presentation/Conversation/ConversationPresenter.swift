@@ -62,19 +62,28 @@ final class ConversationPresenter {
     private let microphonePermissionService: MicrophonePermissionService
     private let audioRecordingService: AudioRecordingService
     private let speechRecognitionService: SpeechRecognitionService
+    private let saveConversationUseCase: SaveConversationUseCase
+    private let addConversationMessageUseCase: AddConversationMessageUseCase
     private var mode: ConversationMode = .talk
     private var voiceInputState: VoiceInputState = .idle
+    private var currentConversation: Conversation
+    private var hasPersistedConversation = false
 
     init(
         view: ConversationView,
         microphonePermissionService: MicrophonePermissionService,
         audioRecordingService: AudioRecordingService,
-        speechRecognitionService: SpeechRecognitionService
+        speechRecognitionService: SpeechRecognitionService,
+        saveConversationUseCase: SaveConversationUseCase,
+        addConversationMessageUseCase: AddConversationMessageUseCase
     ) {
         self.view = view
         self.microphonePermissionService = microphonePermissionService
         self.audioRecordingService = audioRecordingService
         self.speechRecognitionService = speechRecognitionService
+        self.saveConversationUseCase = saveConversationUseCase
+        self.addConversationMessageUseCase = addConversationMessageUseCase
+        self.currentConversation = Self.makeInitialConversation()
     }
 
     func viewDidLoad() {
@@ -92,8 +101,14 @@ final class ConversationPresenter {
         }
 
         mode = nextMode
+        currentConversation.mode = nextMode.domainMode
+        currentConversation.updatedAt = Date()
         view?.hideConversationHints()
         renderCurrentMode()
+
+        if hasPersistedConversation {
+            persistCurrentConversation()
+        }
     }
 
     func didRequestStartTypingHint() {
@@ -173,7 +188,7 @@ final class ConversationPresenter {
 
                 switch result {
                 case .success(let model):
-                    self?.view?.displayRecognizedSpeech(model.text)
+                    self?.handleRecognizedSpeech(model.text)
                 case .failure(let error):
                     AppLogger.error("Speech recognition failed: \(error.localizedDescription)")
                     self?.view?.displayConversationError("Не удалось распознать речь.")
@@ -183,7 +198,19 @@ final class ConversationPresenter {
     }
 
     func didSubmitText(_ text: String) {
-        view?.displaySubmittedText(text)
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else {
+            return
+        }
+
+        view?.displaySubmittedText(normalizedText)
+        persistMessage(
+            text: normalizedText,
+            source: .userTyped,
+            speakerId: nil,
+            speakerLabel: nil,
+            audioDurationMs: nil
+        )
     }
 
     func didRequestRotationToggle() {
@@ -201,5 +228,109 @@ final class ConversationPresenter {
                 isInputVisible: mode == .talk
             )
         )
+    }
+
+    private func handleRecognizedSpeech(_ text: String) {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else {
+            view?.displayConversationError("Речь не распознана.")
+            return
+        }
+
+        view?.displayRecognizedSpeech(normalizedText)
+        persistMessage(
+            text: normalizedText,
+            source: .externalSpeech,
+            speakerId: nil,
+            speakerLabel: "Говорящий 1",
+            audioDurationMs: nil
+        )
+    }
+
+    private func persistCurrentConversation() {
+        let conversation = currentConversation
+
+        Task { [saveConversationUseCase] in
+            do {
+                try await saveConversationUseCase.execute(conversation)
+            } catch {
+                AppLogger.error("Failed to save conversation: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func persistMessage(
+        text: String,
+        source: ConversationMessage.Source,
+        speakerId: String?,
+        speakerLabel: String?,
+        audioDurationMs: Int?
+    ) {
+        let now = Date()
+        if !hasPersistedConversation {
+            currentConversation.title = Self.makeConversationTitle(from: text)
+        }
+
+        currentConversation.mode = mode.domainMode
+        currentConversation.updatedAt = now
+        hasPersistedConversation = true
+
+        let conversation = currentConversation
+        let message = ConversationMessage(
+            id: UUID().uuidString,
+            conversationId: conversation.id,
+            text: text,
+            source: source,
+            speakerId: speakerId,
+            speakerLabel: speakerLabel,
+            isFinal: true,
+            createdAt: now,
+            audioDurationMs: audioDurationMs,
+            syncState: .localOnly
+        )
+
+        Task { [saveConversationUseCase, addConversationMessageUseCase] in
+            do {
+                try await saveConversationUseCase.execute(conversation)
+                try await addConversationMessageUseCase.execute(message)
+            } catch {
+                AppLogger.error("Failed to save conversation message: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private static func makeInitialConversation() -> Conversation {
+        let now = Date()
+
+        return Conversation(
+            id: UUID().uuidString,
+            title: "Новый разговор",
+            mode: .talk,
+            createdAt: now,
+            updatedAt: now,
+            isPinned: false,
+            syncState: .localOnly
+        )
+    }
+
+    private static func makeConversationTitle(from text: String) -> String {
+        let maxTitleLength = 42
+        guard text.count > maxTitleLength else {
+            return text
+        }
+
+        let endIndex = text.index(text.startIndex, offsetBy: maxTitleLength)
+        return "\(text[..<endIndex])..."
+    }
+}
+
+private extension ConversationMode {
+    var domainMode: Conversation.Mode {
+        switch self {
+        case .talk:
+            return .talk
+        case .listen:
+            return .listen
+        }
     }
 }

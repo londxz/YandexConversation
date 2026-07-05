@@ -42,6 +42,25 @@ final class AppContainer {
     private(set) lazy var speechRecognitionService: SpeechRecognitionService = RemoteSpeechRecognitionService(
         apiClient: apiClient
     )
+    private(set) lazy var coreDataStack = CoreDataStack()
+    private(set) lazy var conversationRepository: ConversationRepository = CoreDataConversationRepository(
+        coreDataStack: coreDataStack
+    )
+    private(set) lazy var fetchConversationHistoryUseCase = FetchConversationHistoryUseCase(
+        repository: conversationRepository
+    )
+    private(set) lazy var fetchConversationMessagesUseCase = FetchConversationMessagesUseCase(
+        repository: conversationRepository
+    )
+    private(set) lazy var saveConversationUseCase = SaveConversationUseCase(
+        repository: conversationRepository
+    )
+    private(set) lazy var addConversationMessageUseCase = AddConversationMessageUseCase(
+        repository: conversationRepository
+    )
+    private(set) lazy var deleteConversationUseCase = DeleteConversationUseCase(
+        repository: conversationRepository
+    )
 
     init(
         config: AppConfig = .makeDefault(),

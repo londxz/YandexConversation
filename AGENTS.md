@@ -175,7 +175,9 @@ AppSettings
 
 ### Local Storage
 
-Production iOS storage should use SQLite through a thin repository layer. Core Data is acceptable only if the team commits to it consistently, but SQLite is simpler to reason about with explicit migrations and sync metadata.
+Production iOS storage should use Core Data as the native persistence layer, accessed only through repository protocols and use cases. Do not write raw SQLite queries in feature code. Core Data may use SQLite as its backing store internally, but screens, presenters, and use cases must stay storage-agnostic.
+
+Use lightweight migrations for compatible schema changes and introduce explicit model versions/migration plans when data shape changes become breaking. Keep sync metadata explicit in domain models and persistence mappings.
 
 Store locally:
 
