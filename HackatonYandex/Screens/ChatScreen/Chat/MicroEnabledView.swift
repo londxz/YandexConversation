@@ -94,12 +94,12 @@ class MicroEnabledView: UIView {
 
         NSLayoutConstraint.activate([
             dismissBtn.heightAnchor.constraint(equalToConstant: 56),
-            dismissBtn.widthAnchor.constraint(equalTo: dismissBtn.widthAnchor),
+            dismissBtn.widthAnchor.constraint(equalToConstant: 56),
             dismissBtn.trailingAnchor.constraint(equalTo: playButton.trailingAnchor),
             dismissBtn.bottomAnchor.constraint(equalTo: playButton.topAnchor, constant: -24),
             
             rotateBtn.heightAnchor.constraint(equalToConstant: 56),
-            rotateBtn.widthAnchor.constraint(equalTo: rotateBtn.widthAnchor),
+            rotateBtn.widthAnchor.constraint(equalToConstant: 56),
             rotateBtn.leadingAnchor.constraint(equalTo: playButton.leadingAnchor),
             rotateBtn.bottomAnchor.constraint(equalTo: playButton.topAnchor, constant: -24)
         ])
@@ -128,5 +128,4 @@ class MicroEnabledView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 }
-
 

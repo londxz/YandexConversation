@@ -10,21 +10,20 @@ import UIKit
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
+    private var appCoordinator: AppCoordinator?
 
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         
         guard let windowScene = (scene as? UIWindowScene) else { return }
         let window = UIWindow(windowScene: windowScene)
-        
-        let isOnboarding = UserDefaults.standard.value(forKey: "hasSeenOnboarding") as? Bool ?? false
-        //let isOnboarding = false
-        let OnboardingPageVC = OnboardingPageVC(transitionStyle: .scroll, navigationOrientation: .horizontal)
-        
-        window.rootViewController = isOnboarding ? TabBarController() : OnboardingPageVC
+
+        let container = AppContainer()
+        let appCoordinator = AppCoordinator(window: window, container: container)
+
         self.window = window
-        window.makeKeyAndVisible()
+        self.appCoordinator = appCoordinator
+        appCoordinator.start()
     }
 
 }
-

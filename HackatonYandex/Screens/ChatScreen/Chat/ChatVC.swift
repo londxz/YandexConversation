@@ -6,16 +6,23 @@
 //
 
 import UIKit
-import AVFoundation
 
 class ChatVC: UIViewController {
     
     var chatComponentBottomConstraint: NSLayoutConstraint!
+    var chatComponentHeightConstraint: NSLayoutConstraint!
+    private let container: AppContainer
     
     private let topChatComponent = TopChatComponent()
     private let containerView = UIView()
     let segmentControlComponent = SegmentControlComponent()
     let chatComponent = ChatComponent()
+    lazy var presenter = ConversationPresenter(
+        view: self,
+        microphonePermissionService: container.microphonePermissionService,
+        audioRecordingService: container.audioRecordingService,
+        speechRecognitionService: container.speechRecognitionService
+    )
     
     var typingHint: StartTypingHint?
     var microphoneHint: MicrophoneOnHint?
@@ -26,6 +33,17 @@ class ChatVC: UIViewController {
     
     var microEnabledView: MicroEnabledView?
     var isViewRotated = false
+    var currentConversationMode: ConversationMode = .talk
+
+    init(container: AppContainer = AppContainer()) {
+        self.container = container
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        self.container = AppContainer()
+        super.init(coder: coder)
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -43,10 +61,8 @@ class ChatVC: UIViewController {
         
         segmentControlComponent.delegate = self
         talkVC.delegate = self
-        
-        switchToChild(talkVC)
-        
-        //UserDefaults.standard.removeObject(forKey: "hasSeenOnboarding")
+        chatComponent.delegate = self
+        presenter.viewDidLoad()
     }
     
     deinit {
@@ -55,15 +71,7 @@ class ChatVC: UIViewController {
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        currentChildVC?.viewDidDisappear(animated)
-        
-        resetRotationIfNeeded()
-        
-        typingHint?.hide()
-        typingHint = nil
-        
-        microphoneHint?.hide()
-        microphoneHint = nil
+        presenter.viewDidDisappear()
     }
     
     private func setupTopChatComponent() {
@@ -105,26 +113,26 @@ class ChatVC: UIViewController {
         chatComponent.translatesAutoresizingMaskIntoConstraints = false
         
         chatComponentBottomConstraint = chatComponent.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+        chatComponentHeightConstraint = chatComponent.heightAnchor.constraint(equalToConstant: 56)
         
         
         NSLayoutConstraint.activate([
-            //chatComponent.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             chatComponent.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             chatComponent.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            chatComponent.heightAnchor.constraint(equalToConstant: 56),
+            chatComponentHeightConstraint,
             chatComponentBottomConstraint
         ])
     }
     
     func switchToChild(_ newVC: UIViewController) {
-        // Remove current VC
+        guard currentChildVC !== newVC else { return }
+
         if let current = currentChildVC {
             current.willMove(toParent: nil)
             current.view.removeFromSuperview()
             current.removeFromParent()
         }
         
-        // Add new VC
         addChild(newVC)
         containerView.addSubview(newVC.view)
         newVC.view.translatesAutoresizingMaskIntoConstraints = false

@@ -6,14 +6,16 @@
 //
 
 import UIKit
-import AVFoundation
+
+protocol ChatComponentDelegate: AnyObject {
+    func chatComponentDidRequestStartVoiceRecording(_ component: ChatComponent)
+    func chatComponentDidRequestStopVoiceRecording(_ component: ChatComponent)
+    func chatComponent(_ component: ChatComponent, didSubmitText text: String)
+}
 
 class ChatComponent: UIView {
-    
-    private var audioRecorder: AVAudioRecorder?
-    private var recordingSession: AVAudioSession!
-    private var audioFilename: URL?
-    
+    weak var delegate: ChatComponentDelegate?
+
     let textField = UITextField()
 
     lazy var leftButton: UIButton = {
@@ -45,18 +47,12 @@ class ChatComponent: UIView {
         super.init(frame: frame)
         setupView()
         textField.delegate = self
-        
-        recordingSession = AVAudioSession.sharedInstance()
-        do {
-            try recordingSession.setCategory(.playAndRecord, mode: .default)
-            try recordingSession.setActive(true)
-        } catch {
-            print("Failed to set up recording session: \(error)")
-        }
-        
+
         let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPressRecognizer.cancelsTouchesInView = true
         textRightButton.addGestureRecognizer(longPressRecognizer)
         
+        textRightButton.addTarget(self, action: #selector(sendTextButtonTapped), for: .touchUpInside)
         speakRightButton.addTarget(self, action: #selector(speakButtonTapped), for: .touchUpInside)
     }
 
@@ -66,17 +62,10 @@ class ChatComponent: UIView {
         textField.delegate = self
         
         let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPressRecognizer.cancelsTouchesInView = true
         textRightButton.addGestureRecognizer(longPressRecognizer)
-        
-        recordingSession = AVAudioSession.sharedInstance()
-        do {
-            try recordingSession.setCategory(.playAndRecord, mode: .default)
-            try recordingSession.setActive(true)
-        } catch {
-            print("Failed to set up recording session: \(error)")
-        }
 
-
+        textRightButton.addTarget(self, action: #selector(sendTextButtonTapped), for: .touchUpInside)
         speakRightButton.addTarget(self, action: #selector(speakButtonTapped), for: .touchUpInside)
     }
 
@@ -142,76 +131,46 @@ class ChatComponent: UIView {
     private func stopRecordingAnimation() {
         speakRightButton.layer.removeAnimation(forKey: "pulse")
     }
+
+    func resetVoiceInputState() {
+        speakRightButton.isHidden = true
+        textRightButton.isHidden = false
+        stopRecordingAnimation()
+    }
+
+    private func submitTextFromField() {
+        let text = textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !text.isEmpty else { return }
+
+        delegate?.chatComponent(self, didSubmitText: text)
+        textField.text = nil
+        textField.resignFirstResponder()
+    }
     
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         if gesture.state == .began {
             textRightButton.isHidden = true
             speakRightButton.isHidden = false
             startRecordingAnimation()
-            startRecording() // ✅ запускаем запись
-            print("Удержание: показан speakRightButton, началась анимация и запись")
+            delegate?.chatComponentDidRequestStartVoiceRecording(self)
         }
     }
 
 
     @objc private func speakButtonTapped() {
-        speakRightButton.isHidden = true
-        textRightButton.isHidden = false
-        stopRecordingAnimation()
-        stopRecording() // ✅ останавливаем запись
-        print("Нажатие: вернули textRightButton, остановили анимацию и запись")
-    }
-    
-    private func startRecording() {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let filename = "recording_\(UUID().uuidString.prefix(8)).wav"
-        audioFilename = documentsDirectory.appendingPathComponent(filename)
-        
-        let settings = [
-            AVFormatIDKey: Int(kAudioFormatLinearPCM),
-            AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey: false
-        ] as [String : Any]
-        
-        do {
-            audioRecorder = try AVAudioRecorder(url: audioFilename!, settings: settings)
-            audioRecorder?.record()
-            print("🎤 Началась запись\n\n\n\n")
-        } catch {
-            print("Не удалось начать запись: \(error)\n\n\n\n")
-        }
+        resetVoiceInputState()
+        delegate?.chatComponentDidRequestStopVoiceRecording(self)
     }
 
-    private func stopRecording() {
-        audioRecorder?.stop()
-        
-        guard let fileURL = audioFilename else {
-            print("❌ Файл не найден")
-            return
-        }
-        
-        print("📁 Запись завершена. Файл сохранён по пути: \(fileURL.path)\n")
-        
-        Networking().uploadWavFile(fileURL: fileURL) { result in
-            switch result {
-            case .success(let model):
-                print("✅ Распознанный текст: \(model.text)\n\n\n\n\n")
-            case .failure(let error):
-                print("❌ Ошибка при распознавании: \(error.localizedDescription)\n")
-            }
-        }
+    @objc private func sendTextButtonTapped() {
+        submitTextFromField()
     }
-
 
 }
 
 extension ChatComponent: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        print(1) // Вывод 1 в консоль
+        submitTextFromField()
         return true
     }
 }

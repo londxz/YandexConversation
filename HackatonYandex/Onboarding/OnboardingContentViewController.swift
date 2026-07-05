@@ -9,6 +9,7 @@ import UIKit
 
 class OnboardingContentVC: UIViewController {
     private let page: OnboardingPageModel
+    let pageIndex: Int
     var onNext: (() -> Void)?
     var onSkip: (() -> Void)?
     
@@ -28,8 +29,9 @@ class OnboardingContentVC: UIViewController {
     private var mainStack = UIStackView()
     private var buttonStack = UIStackView()
 
-    init(page: OnboardingPageModel) {
+    init(page: OnboardingPageModel, pageIndex: Int) {
         self.page = page
+        self.pageIndex = pageIndex
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -138,4 +140,3 @@ class OnboardingContentVC: UIViewController {
     @objc func nextTapped() { onNext?() }
     @objc func skipTapped() { onSkip?() }
 }
-

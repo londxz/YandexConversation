@@ -8,37 +8,76 @@
 import UIKit
 
 extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate, MicroEnabledViewDelegate {
-    
+
     func segmentChanged(to index: Int) {
-        typingHint?.hide()
-        typingHint = nil
-        
-        microphoneHint?.hide()
-        microphoneHint = nil
-        
-        switch index {
-        case 0: switchToChild(talkVC)
-        case 1: switchToChild(listenVC)
-        default: break
-        }
+        presenter.didChangeSegment(index: index)
     }
-    
+
     func showStartTypingHint() {
+        presenter.didRequestStartTypingHint()
+    }
+
+    func showMicrophoneHint() {
+        presenter.didRequestMicrophoneHint()
+    }
+
+    func didRequestRotationToggle() {
+        presenter.didRequestRotationToggle()
+    }
+
+    func didRequestResetRotation() {
+        presenter.didRequestResetRotation()
+    }
+}
+
+extension ChatVC: ConversationView {
+    func render(_ viewModel: ConversationViewModel) {
+        currentConversationMode = viewModel.mode
+        segmentControlComponent.setSelectedIndex(viewModel.mode.segmentIndex)
+
+        switch viewModel.mode {
+        case .talk:
+            switchToChild(talkVC)
+        case .listen:
+            switchToChild(listenVC)
+        }
+
+        UIView.animate(withDuration: 0.2) {
+            self.chatComponent.alpha = viewModel.isInputVisible ? 1 : 0
+            self.chatComponentHeightConstraint.constant = viewModel.isInputVisible ? 56 : 0
+            self.view.layoutIfNeeded()
+        }
+        chatComponent.isUserInteractionEnabled = viewModel.isInputVisible
+    }
+
+    func displayStartTypingHint() {
+        typingHint?.hide()
+
         let hint = StartTypingHint()
         hint.show(over: view, above: chatComponent)
         typingHint = hint
     }
-    
-    func showMicrophoneHint() {
+
+    func displayMicrophoneHint() {
+        microphoneHint?.hide()
+
         let hint = MicrophoneOnHint()
         hint.onTap = { [weak self] in
-            self?.presentMicrophoneOverlay()
+            self?.presenter.didTapMicrophoneHint()
         }
 
         microphoneHint = hint
         hint.show(over: self.view, under: segmentControlComponent)
     }
-    
+
+    func hideConversationHints() {
+        typingHint?.hide()
+        typingHint = nil
+
+        microphoneHint?.hide()
+        microphoneHint = nil
+    }
+
     func presentMicrophoneOverlay() {
         microEnabledView?.removeFromSuperview()
         
@@ -68,12 +107,53 @@ extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate, M
             overlay.transform = .identity
         }, completion: nil)
     }
-    
-    func didRequestRotationToggle() {
+
+    func toggleConversationDisplayRotation() {
         toggleRotation()
     }
-    
-    func didRequestResetRotation() {
+
+    func resetConversationDisplay() {
         resetRotationIfNeeded()
+    }
+}
+
+extension ChatVC: ChatComponentDelegate {
+    func chatComponentDidRequestStartVoiceRecording(_ component: ChatComponent) {
+        if !presenter.didRequestStartVoiceRecording() {
+            component.resetVoiceInputState()
+        }
+    }
+
+    func chatComponentDidRequestStopVoiceRecording(_ component: ChatComponent) {
+        presenter.didRequestStopVoiceRecording()
+    }
+
+    func chatComponent(_ component: ChatComponent, didSubmitText text: String) {
+        presenter.didSubmitText(text)
+    }
+
+    func displayRecognizedSpeech(_ text: String) {
+        switch currentConversationMode {
+        case .talk:
+            talkVC.appendIncomingMessage(text)
+        case .listen:
+            listenVC.appendSpeech(text)
+        }
+    }
+
+    func displayConversationError(_ message: String) {
+        chatComponent.resetVoiceInputState()
+
+        let alert = UIAlertController(
+            title: "Что-то пошло не так",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Понятно", style: .default))
+        present(alert, animated: true)
+    }
+
+    func displaySubmittedText(_ text: String) {
+        talkVC.appendUserMessage(text)
     }
 }
