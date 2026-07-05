@@ -127,6 +127,15 @@ extension ChatVC: ConversationView {
     func resetConversationDisplay() {
         resetRotationIfNeeded()
     }
+
+    func clearConversationMessages() {
+        dismissMicrophoneOverlayIfNeeded()
+        hideQuickPhrasePanel(animated: false)
+        chatComponent.textField.text = nil
+        chatComponent.resetVoiceInputState()
+        talkVC.clearMessages()
+        listenVC.clearTranscript()
+    }
 }
 
 extension ChatVC: ChatComponentDelegate {

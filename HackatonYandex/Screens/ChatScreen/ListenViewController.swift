@@ -42,6 +42,17 @@ class ListenViewController: UIViewController {
         scrollToBottom()
     }
 
+    func clearTranscript() {
+        guard isViewLoaded else { return }
+
+        stackView.arrangedSubviews.forEach { view in
+            stackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        emptyStateLabel.isHidden = false
+        scrollView.setContentOffset(.zero, animated: false)
+    }
+
     private func setupTranscriptView() {
         scrollView.alwaysBounceVertical = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false

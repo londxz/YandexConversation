@@ -36,7 +36,7 @@ class ChatVC: UIViewController {
     var microphoneHint: MicrophoneOnHint?
     
     private var currentChildVC: UIViewController?
-    lazy var talkVC = TalkViewController()
+    lazy var talkVC = TalkViewController(textToSpeechService: container.textToSpeechService)
     lazy var listenVC = ListenViewController()
     
     var microEnabledView: MicroEnabledView?
@@ -117,6 +117,8 @@ class ChatVC: UIViewController {
     private func setupTopActions() {
         topChatComponent.leftNavButton.addTarget(self, action: #selector(historyTapped), for: .touchUpInside)
         topChatComponent.leftNavButton.accessibilityLabel = "Открыть историю разговоров"
+        topChatComponent.rightNavButton.addTarget(self, action: #selector(newConversationTapped), for: .touchUpInside)
+        topChatComponent.rightNavButton.accessibilityLabel = "Начать новый разговор"
     }
     
     private func setupSegmentControlComponent() {
@@ -224,6 +226,11 @@ class ChatVC: UIViewController {
         let navigationController = UINavigationController(rootViewController: historyVC)
         navigationController.modalPresentationStyle = .fullScreen
         present(navigationController, animated: true)
+    }
+
+    @objc private func newConversationTapped() {
+        view.endEditing(true)
+        presenter.didRequestNewConversation()
     }
 
     func toggleQuickPhrasePanel() {

@@ -53,6 +53,7 @@ protocol ConversationView: AnyObject {
     func displayRecognizedSpeech(_ text: String)
     func displayConversationError(_ message: String)
     func displaySubmittedText(_ text: String)
+    func clearConversationMessages()
     func toggleConversationDisplayRotation()
     func resetConversationDisplay()
 }
@@ -83,7 +84,7 @@ final class ConversationPresenter {
         self.speechRecognitionService = speechRecognitionService
         self.saveConversationUseCase = saveConversationUseCase
         self.addConversationMessageUseCase = addConversationMessageUseCase
-        self.currentConversation = Self.makeInitialConversation()
+        self.currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
     }
 
     func viewDidLoad() {
@@ -180,18 +181,22 @@ final class ConversationPresenter {
         }
 
         voiceInputState = .recognizing
+        let conversationId = currentConversation.id
         let audioRecordingService = audioRecordingService
         speechRecognitionService.transcribeAudio(fileURL: fileURL) { [weak self] result in
             DispatchQueue.main.async {
                 audioRecordingService.discardRecording(at: fileURL)
-                self?.voiceInputState = .idle
+                guard let self else { return }
+                guard self.currentConversation.id == conversationId else { return }
+
+                self.voiceInputState = .idle
 
                 switch result {
                 case .success(let model):
-                    self?.handleRecognizedSpeech(model.text)
+                    self.handleRecognizedSpeech(model.text)
                 case .failure(let error):
                     AppLogger.error("Speech recognition failed: \(error.localizedDescription)")
-                    self?.view?.displayConversationError("Не удалось распознать речь.")
+                    self.view?.displayConversationError("Не удалось распознать речь.")
                 }
             }
         }
@@ -203,6 +208,17 @@ final class ConversationPresenter {
 
     func didSubmitQuickPhrase(_ text: String) {
         submitOutgoingMessage(text, source: .quickPhrase)
+    }
+
+    func didRequestNewConversation() {
+        stopActiveVoiceInputIfNeeded()
+        currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
+        hasPersistedConversation = false
+
+        view?.hideConversationHints()
+        view?.resetConversationDisplay()
+        view?.clearConversationMessages()
+        renderCurrentMode()
     }
 
     func didRequestRotationToggle() {
@@ -310,13 +326,27 @@ final class ConversationPresenter {
         }
     }
 
-    private static func makeInitialConversation() -> Conversation {
+    private func stopActiveVoiceInputIfNeeded() {
+        switch voiceInputState {
+        case .idle:
+            break
+        case .requestingPermission, .recognizing:
+            voiceInputState = .idle
+        case .recording:
+            if let fileURL = audioRecordingService.stopRecording() {
+                audioRecordingService.discardRecording(at: fileURL)
+            }
+            voiceInputState = .idle
+        }
+    }
+
+    private static func makeInitialConversation(mode: Conversation.Mode) -> Conversation {
         let now = Date()
 
         return Conversation(
             id: UUID().uuidString,
             title: "Новый разговор",
-            mode: .talk,
+            mode: mode,
             createdAt: now,
             updatedAt: now,
             isPinned: false,
