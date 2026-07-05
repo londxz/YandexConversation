@@ -7,6 +7,13 @@
 
 import UIKit
 
+extension ChatVC: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let touchedView = touch.view else { return true }
+        return !touchedView.isDescendant(of: chatComponent)
+    }
+}
+
 extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate, MicroEnabledViewDelegate {
 
     func segmentChanged(to index: Int) {
