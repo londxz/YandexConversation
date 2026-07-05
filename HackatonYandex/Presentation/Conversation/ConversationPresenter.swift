@@ -112,22 +112,6 @@ final class ConversationPresenter {
         }
     }
 
-    func didRequestStartTypingHint() {
-        guard mode == .talk else {
-            return
-        }
-
-        view?.displayStartTypingHint()
-    }
-
-    func didRequestMicrophoneHint() {
-        guard mode == .talk else {
-            return
-        }
-
-        view?.displayMicrophoneHint()
-    }
-
     func didTapMicrophoneHint() {
         view?.presentMicrophoneOverlay()
     }
@@ -219,6 +203,11 @@ final class ConversationPresenter {
         view?.resetConversationDisplay()
         view?.clearConversationMessages()
         renderCurrentMode()
+        displayEmptyTalkHintsIfNeeded()
+    }
+
+    func didShowEmptyTalkScreen() {
+        displayEmptyTalkHintsIfNeeded()
     }
 
     func didRequestRotationToggle() {
@@ -238,6 +227,13 @@ final class ConversationPresenter {
         )
     }
 
+    private func displayEmptyTalkHintsIfNeeded() {
+        guard mode == .talk else { return }
+
+        view?.displayMicrophoneHint()
+        view?.displayStartTypingHint()
+    }
+
     private func handleRecognizedSpeech(_ text: String) {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
@@ -245,6 +241,7 @@ final class ConversationPresenter {
             return
         }
 
+        view?.hideConversationHints()
         view?.displayRecognizedSpeech(normalizedText)
         persistMessage(
             text: normalizedText,
@@ -264,6 +261,7 @@ final class ConversationPresenter {
             return
         }
 
+        view?.hideConversationHints()
         view?.displaySubmittedText(normalizedText)
         persistMessage(
             text: normalizedText,

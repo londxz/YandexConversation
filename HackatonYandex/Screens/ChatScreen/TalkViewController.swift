@@ -8,8 +8,7 @@
 import UIKit
 
 protocol TalkViewControllerDelegate: AnyObject {
-    func showStartTypingHint()
-    func showMicrophoneHint()
+    func talkViewControllerDidAppearEmpty(_ viewController: TalkViewController)
 }
 
 class TalkViewController: UIViewController {
@@ -41,13 +40,12 @@ class TalkViewController: UIViewController {
         view.backgroundColor = .chatBackground
         setupMessagesView()
     }
-    
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         guard !hasMessages else { return }
 
-        delegate?.showStartTypingHint()
-        delegate?.showMicrophoneHint()
+        delegate?.talkViewControllerDidAppearEmpty(self)
     }
 
     func appendUserMessage(_ text: String) {

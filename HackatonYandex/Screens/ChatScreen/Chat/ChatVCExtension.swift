@@ -21,12 +21,8 @@ extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate, M
         presenter.didChangeSegment(index: index)
     }
 
-    func showStartTypingHint() {
-        presenter.didRequestStartTypingHint()
-    }
-
-    func showMicrophoneHint() {
-        presenter.didRequestMicrophoneHint()
+    func talkViewControllerDidAppearEmpty(_ viewController: TalkViewController) {
+        presenter.didShowEmptyTalkScreen()
     }
 
     func didRequestRotationToggle() {
