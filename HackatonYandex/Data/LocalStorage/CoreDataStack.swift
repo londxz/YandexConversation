@@ -134,9 +134,38 @@ private extension CoreDataStack {
         ]
         messageEntity.uniquenessConstraints = [["id"]]
 
+        let phraseEntity = NSEntityDescription()
+        phraseEntity.name = "CDPhrase"
+        phraseEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        phraseEntity.properties = [
+            attribute("id", type: .stringAttributeType),
+            attribute("folderId", type: .stringAttributeType, isOptional: true),
+            attribute("text", type: .stringAttributeType),
+            attribute("category", type: .stringAttributeType, isOptional: true),
+            attribute("isFavorite", type: .booleanAttributeType),
+            attribute("sortOrder", type: .integer64AttributeType),
+            attribute("usageCount", type: .integer64AttributeType),
+            attribute("createdAt", type: .dateAttributeType),
+            attribute("updatedAt", type: .dateAttributeType),
+            attribute("syncState", type: .stringAttributeType)
+        ]
+        phraseEntity.uniquenessConstraints = [["id"]]
+
+        let metadataEntity = NSEntityDescription()
+        metadataEntity.name = "CDLocalMetadata"
+        metadataEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        metadataEntity.properties = [
+            attribute("key", type: .stringAttributeType),
+            attribute("value", type: .stringAttributeType),
+            attribute("updatedAt", type: .dateAttributeType)
+        ]
+        metadataEntity.uniquenessConstraints = [["key"]]
+
         model.entities = [
             conversationEntity,
-            messageEntity
+            messageEntity,
+            phraseEntity,
+            metadataEntity
         ]
 
         return model

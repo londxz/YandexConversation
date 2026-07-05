@@ -11,12 +11,18 @@ class ChatVC: UIViewController {
     
     var chatComponentBottomConstraint: NSLayoutConstraint!
     var chatComponentHeightConstraint: NSLayoutConstraint!
+    let quickPhrasePanelHeight: CGFloat = 306
+    var isQuickPhrasePanelVisible = false
     private let container: AppContainer
     
     private let topChatComponent = TopChatComponent()
     private let containerView = UIView()
     let segmentControlComponent = SegmentControlComponent()
     let chatComponent = ChatComponent()
+    lazy var quickPhrasePanel = QuickPhrasePanelView(
+        fetchPhrasesUseCase: container.fetchPhrasesUseCase,
+        recordPhraseUsageUseCase: container.recordPhraseUsageUseCase
+    )
     lazy var presenter = ConversationPresenter(
         view: self,
         microphonePermissionService: container.microphonePermissionService,
@@ -60,6 +66,7 @@ class ChatVC: UIViewController {
         setupTopChatComponent()
         setupSegmentControlComponent()
         setupChatComponent()
+        setupQuickPhrasePanel()
         setupContainerView()
         setupTopActions()
         
@@ -86,6 +93,24 @@ class ChatVC: UIViewController {
             topChatComponent.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topChatComponent.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             topChatComponent.heightAnchor.constraint(equalToConstant: 56)
+        ])
+    }
+
+    private func setupQuickPhrasePanel() {
+        view.addSubview(quickPhrasePanel)
+        quickPhrasePanel.translatesAutoresizingMaskIntoConstraints = false
+        quickPhrasePanel.alpha = 0
+        quickPhrasePanel.isHidden = true
+        quickPhrasePanel.onSelectPhrase = { [weak self] text in
+            self?.hideQuickPhrasePanel(animated: true)
+            self?.presenter.didSubmitQuickPhrase(text)
+        }
+
+        NSLayoutConstraint.activate([
+            quickPhrasePanel.topAnchor.constraint(equalTo: chatComponent.bottomAnchor),
+            quickPhrasePanel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            quickPhrasePanel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            quickPhrasePanel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
     }
 
@@ -188,14 +213,63 @@ class ChatVC: UIViewController {
     
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+        hideQuickPhrasePanel(animated: true)
     }
 
     @objc private func historyTapped() {
         view.endEditing(true)
+        hideQuickPhrasePanel(animated: true)
 
         let historyVC = HistoryViewController(container: container)
         let navigationController = UINavigationController(rootViewController: historyVC)
         navigationController.modalPresentationStyle = .fullScreen
         present(navigationController, animated: true)
+    }
+
+    func toggleQuickPhrasePanel() {
+        view.endEditing(true)
+
+        if isQuickPhrasePanelVisible {
+            hideQuickPhrasePanel(animated: true)
+        } else {
+            showQuickPhrasePanel()
+        }
+    }
+
+    func showQuickPhrasePanel() {
+        guard currentConversationMode == .talk else { return }
+
+        isQuickPhrasePanelVisible = true
+        quickPhrasePanel.isHidden = false
+        quickPhrasePanel.reloadPhrases()
+        chatComponentBottomConstraint.constant = -quickPhrasePanelHeight
+
+        UIView.animate(withDuration: 0.22) {
+            self.quickPhrasePanel.alpha = 1
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    func hideQuickPhrasePanel(animated: Bool) {
+        guard isQuickPhrasePanelVisible || !quickPhrasePanel.isHidden else { return }
+
+        isQuickPhrasePanelVisible = false
+        chatComponentBottomConstraint.constant = 0
+
+        let changes = {
+            self.quickPhrasePanel.alpha = 0
+            self.view.layoutIfNeeded()
+        }
+
+        let completion: (Bool) -> Void = { _ in
+            self.quickPhrasePanel.isHidden = true
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.18, animations: changes, completion: completion)
+        } else {
+            changes()
+            completion(true)
+        }
     }
 }

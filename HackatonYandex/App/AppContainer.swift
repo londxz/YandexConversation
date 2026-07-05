@@ -46,6 +46,9 @@ final class AppContainer {
     private(set) lazy var conversationRepository: ConversationRepository = CoreDataConversationRepository(
         coreDataStack: coreDataStack
     )
+    private(set) lazy var phraseRepository: PhraseRepository = CoreDataPhraseRepository(
+        coreDataStack: coreDataStack
+    )
     private(set) lazy var fetchConversationHistoryUseCase = FetchConversationHistoryUseCase(
         repository: conversationRepository
     )
@@ -60,6 +63,21 @@ final class AppContainer {
     )
     private(set) lazy var deleteConversationUseCase = DeleteConversationUseCase(
         repository: conversationRepository
+    )
+    private(set) lazy var fetchPhrasesUseCase = FetchPhrasesUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var createPhraseUseCase = CreatePhraseUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var savePhraseUseCase = SavePhraseUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var deletePhraseUseCase = DeletePhraseUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var recordPhraseUsageUseCase = RecordPhraseUsageUseCase(
+        repository: phraseRepository
     )
 
     init(

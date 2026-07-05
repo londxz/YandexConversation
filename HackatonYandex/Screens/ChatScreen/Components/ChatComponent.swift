@@ -8,6 +8,7 @@
 import UIKit
 
 protocol ChatComponentDelegate: AnyObject {
+    func chatComponentDidRequestQuickPhrases(_ component: ChatComponent)
     func chatComponentDidRequestStartVoiceRecording(_ component: ChatComponent)
     func chatComponentDidRequestStopVoiceRecording(_ component: ChatComponent)
     func chatComponent(_ component: ChatComponent, didSubmitText text: String)
@@ -54,6 +55,7 @@ class ChatComponent: UIView {
         
         textRightButton.addTarget(self, action: #selector(sendTextButtonTapped), for: .touchUpInside)
         speakRightButton.addTarget(self, action: #selector(speakButtonTapped), for: .touchUpInside)
+        leftButton.addTarget(self, action: #selector(quickPhrasesButtonTapped), for: .touchUpInside)
     }
 
     required init?(coder: NSCoder) {
@@ -67,6 +69,7 @@ class ChatComponent: UIView {
 
         textRightButton.addTarget(self, action: #selector(sendTextButtonTapped), for: .touchUpInside)
         speakRightButton.addTarget(self, action: #selector(speakButtonTapped), for: .touchUpInside)
+        leftButton.addTarget(self, action: #selector(quickPhrasesButtonTapped), for: .touchUpInside)
     }
 
     private func setupView() {
@@ -166,6 +169,9 @@ class ChatComponent: UIView {
         submitTextFromField()
     }
 
+    @objc private func quickPhrasesButtonTapped() {
+        delegate?.chatComponentDidRequestQuickPhrases(self)
+    }
 }
 
 extension ChatComponent: UITextFieldDelegate {

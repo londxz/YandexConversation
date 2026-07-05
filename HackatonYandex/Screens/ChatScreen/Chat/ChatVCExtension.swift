@@ -11,6 +11,7 @@ extension ChatVC: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard let touchedView = touch.view else { return true }
         return !touchedView.isDescendant(of: chatComponent)
+            && !touchedView.isDescendant(of: quickPhrasePanel)
     }
 }
 
@@ -41,6 +42,10 @@ extension ChatVC: ConversationView {
     func render(_ viewModel: ConversationViewModel) {
         currentConversationMode = viewModel.mode
         segmentControlComponent.setSelectedIndex(viewModel.mode.segmentIndex)
+
+        if !viewModel.isInputVisible {
+            hideQuickPhrasePanel(animated: false)
+        }
 
         switch viewModel.mode {
         case .talk:
@@ -125,6 +130,10 @@ extension ChatVC: ConversationView {
 }
 
 extension ChatVC: ChatComponentDelegate {
+    func chatComponentDidRequestQuickPhrases(_ component: ChatComponent) {
+        toggleQuickPhrasePanel()
+    }
+
     func chatComponentDidRequestStartVoiceRecording(_ component: ChatComponent) {
         if !presenter.didRequestStartVoiceRecording() {
             component.resetVoiceInputState()

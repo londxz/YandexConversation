@@ -27,6 +27,8 @@ extension ChatVC {
               let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
               let curveValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt else { return }
 
+        hideQuickPhrasePanel(animated: false)
+
         let keyboardHeight = keyboardFrame.height
         chatComponentBottomConstraint.constant = -keyboardHeight + view.safeAreaInsets.bottom
 
@@ -41,7 +43,7 @@ extension ChatVC {
               let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double,
               let curveValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt else { return }
 
-        chatComponentBottomConstraint.constant = 0
+        chatComponentBottomConstraint.constant = isQuickPhrasePanelVisible ? -quickPhrasePanelHeight : 0
 
         let options = UIView.AnimationOptions(rawValue: curveValue << 16)
         UIView.animate(withDuration: duration, delay: 0, options: options) {

@@ -198,19 +198,11 @@ final class ConversationPresenter {
     }
 
     func didSubmitText(_ text: String) {
-        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedText.isEmpty else {
-            return
-        }
+        submitOutgoingMessage(text, source: .userTyped)
+    }
 
-        view?.displaySubmittedText(normalizedText)
-        persistMessage(
-            text: normalizedText,
-            source: .userTyped,
-            speakerId: nil,
-            speakerLabel: nil,
-            audioDurationMs: nil
-        )
+    func didSubmitQuickPhrase(_ text: String) {
+        submitOutgoingMessage(text, source: .quickPhrase)
     }
 
     func didRequestRotationToggle() {
@@ -243,6 +235,25 @@ final class ConversationPresenter {
             source: .externalSpeech,
             speakerId: nil,
             speakerLabel: "Говорящий 1",
+            audioDurationMs: nil
+        )
+    }
+
+    private func submitOutgoingMessage(
+        _ text: String,
+        source: ConversationMessage.Source
+    ) {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else {
+            return
+        }
+
+        view?.displaySubmittedText(normalizedText)
+        persistMessage(
+            text: normalizedText,
+            source: source,
+            speakerId: nil,
+            speakerLabel: nil,
             audioDurationMs: nil
         )
     }
