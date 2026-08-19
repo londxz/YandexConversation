@@ -15,6 +15,19 @@ final class DefaultMicrophonePermissionService: MicrophonePermissionService {
         self.audioSession = audioSession
     }
 
+    var authorizationStatus: MicrophonePermissionStatus {
+        switch audioSession.recordPermission {
+        case .granted:
+            return .granted
+        case .denied:
+            return .denied
+        case .undetermined:
+            return .undetermined
+        @unknown default:
+            return .denied
+        }
+    }
+
     func requestPermission(completion: @escaping (Bool) -> Void) {
         switch audioSession.recordPermission {
         case .granted:

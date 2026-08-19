@@ -23,16 +23,19 @@ final class APIClient {
         self.deviceSessionRepository = deviceSessionRepository
     }
 
+    @discardableResult
     func uploadWavFile(
         fileURL: URL,
         language: String,
+        conversationId: String,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
-    ) {
+    ) -> Task<Void, Never> {
         Task {
             do {
                 let response = try await uploadWavFile(
                     fileURL: fileURL,
-                    language: language
+                    language: language,
+                    conversationId: conversationId
                 )
                 completion(.success(response))
             } catch {
@@ -43,13 +46,20 @@ final class APIClient {
 
     private func uploadWavFile(
         fileURL: URL,
-        language: String
+        language: String,
+        conversationId: String
     ) async throws -> SpeechToTextModel {
         let boundary = UUID().uuidString
         var data = Data()
         appendMultipartField(
             name: "language",
             value: language,
+            boundary: boundary,
+            to: &data
+        )
+        appendMultipartField(
+            name: "conversation_id",
+            value: conversationId,
             boundary: boundary,
             to: &data
         )

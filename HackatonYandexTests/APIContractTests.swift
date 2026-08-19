@@ -15,27 +15,8 @@ final class APIContractTests: XCTestCase {
     }
 
     func testSpeechTranscriptionRequestAndResponseFollowV1Contract() async throws {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [URLProtocolStub.self]
-        let session = URLSession(configuration: configuration)
-        let config = AppConfig(
-            environment: .development,
-            apiBaseURL: try XCTUnwrap(URL(string: "https://api.example.com")),
-            requestTimeout: 5
-        )
-        let client = APIClient(
-            httpClient: HTTPClient(config: config, urlSession: session),
-            deviceSessionRepository: DeviceSessionRepositoryStub(
-                accessToken: "access-token",
-                refreshedAccessToken: "fresh-access-token"
-            )
-        )
-        let audioURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("api-contract-\(UUID().uuidString).wav")
-        try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioURL)
-        defer { try? FileManager.default.removeItem(at: audioURL) }
-
-        URLProtocolStub.handler = { request in
+        let conversationId = "682e61f1-d211-4a20-8b5c-48a164bc4043"
+        let transport = HTTPTransportStub { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.path, "/v1/speech/transcribe")
             XCTAssertNotNil(request.value(forHTTPHeaderField: "X-Request-ID"))
@@ -47,6 +28,14 @@ final class APIContractTests: XCTestCase {
                 request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true
             )
 
+            let body = String(
+                decoding: try XCTUnwrap(request.httpBody),
+                as: UTF8.self
+            )
+            XCTAssertTrue(body.contains("name=\"language\"\r\n\r\nru-RU"))
+            XCTAssertTrue(body.contains("name=\"conversation_id\"\r\n\r\n\(conversationId)"))
+            XCTAssertTrue(body.contains("name=\"file\"; filename="))
+
             let response = try XCTUnwrap(
                 HTTPURLResponse(
                     url: try XCTUnwrap(request.url),
@@ -55,7 +44,7 @@ final class APIContractTests: XCTestCase {
                     headerFields: ["X-Request-ID": "request-test"]
                 )
             )
-            let body = Data(
+            let responseBody = Data(
                 """
                 {
                   "text": "Здравствуйте",
@@ -65,11 +54,26 @@ final class APIContractTests: XCTestCase {
                 }
                 """.utf8
             )
-            return (response, body)
+            return (responseBody, response)
         }
+        let client = APIClient(
+            httpClient: HTTPClient(config: makeConfig(), transport: transport),
+            deviceSessionRepository: DeviceSessionRepositoryStub(
+                accessToken: "access-token",
+                refreshedAccessToken: "fresh-access-token"
+            )
+        )
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("api-contract-\(UUID().uuidString).wav")
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioURL)
+        defer { try? FileManager.default.removeItem(at: audioURL) }
 
         let result = try await withCheckedThrowingContinuation { continuation in
-            client.uploadWavFile(fileURL: audioURL, language: "ru-RU") { result in
+            client.uploadWavFile(
+                fileURL: audioURL,
+                language: "ru-RU",
+                conversationId: conversationId
+            ) { result in
                 continuation.resume(with: result)
             }
         }
@@ -205,7 +209,11 @@ final class APIContractTests: XCTestCase {
         }
 
         let result = try await withCheckedThrowingContinuation { continuation in
-            client.uploadWavFile(fileURL: audioURL, language: "ru-RU") { result in
+            client.uploadWavFile(
+                fileURL: audioURL,
+                language: "ru-RU",
+                conversationId: "682e61f1-d211-4a20-8b5c-48a164bc4043"
+            ) { result in
                 continuation.resume(with: result)
             }
         }

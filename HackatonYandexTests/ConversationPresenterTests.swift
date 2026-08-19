@@ -65,28 +65,229 @@ final class ConversationPresenterTests: XCTestCase {
         XCTAssertEqual(context.view.clearCallCount, 1)
     }
 
+    func testVoiceRecordingSendsCurrentConversationAndRendersTranscript() async throws {
+        var settings = AppSettings.defaultValue
+        settings.privacyMode = .standard
+        settings.autoStartMicrophone = false
+        settings.transcriptFontScale = 1.25
+
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("presenter-recording.wav")
+        let context = makeContext(settings: settings)
+        context.audioRecordingService.recordingURL = audioURL
+        context.speechRecognitionService.result = .success(
+            SpeechToTextModel(
+                text: "  Чем я могу помочь?  ",
+                language: "ru-RU",
+                durationMs: 1_250,
+                confidence: 0.92
+            )
+        )
+
+        await loadSettings(in: context)
+
+        let recordingStarted = expectation(description: "Recording started")
+        context.view.onRender = { viewModel in
+            if viewModel.voiceInputState == .recording {
+                recordingStarted.fulfill()
+            }
+        }
+        XCTAssertTrue(context.presenter.didRequestStartVoiceRecording())
+        await fulfillment(of: [recordingStarted], timeout: 1)
+        context.view.onRender = nil
+
+        let speechRendered = expectation(description: "Speech rendered")
+        context.view.onRecognizedSpeech = { speechRendered.fulfill() }
+        context.presenter.didRequestStopVoiceRecording()
+        await fulfillment(of: [speechRendered], timeout: 1)
+
+        XCTAssertEqual(context.audioRecordingService.startCallCount, 1)
+        XCTAssertEqual(context.audioRecordingService.stopCallCount, 1)
+        XCTAssertEqual(context.audioRecordingService.discardedURLs, [audioURL])
+        XCTAssertEqual(context.view.recognizedTexts, ["Чем я могу помочь?"])
+        let request = try XCTUnwrap(context.speechRecognitionService.requests.first)
+        XCTAssertEqual(request.fileURL, audioURL)
+        XCTAssertEqual(request.language, "ru-RU")
+        XCTAssertNotNil(UUID(uuidString: request.conversationId))
+        XCTAssertTrue(
+            context.view.renderedModels.contains { $0.voiceInputState == .recognizing }
+        )
+        XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
+    }
+
+    func testVoiceInputStopsAtConfiguredLimit() async {
+        var settings = AppSettings.defaultValue
+        settings.privacyMode = .standard
+        settings.autoStartMicrophone = false
+        settings.transcriptFontScale = 1.25
+
+        let context = makeContext(
+            settings: settings,
+            maximumRecordingDuration: 0.01
+        )
+        context.audioRecordingService.recordingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("presenter-auto-limit.wav")
+        context.speechRecognitionService.result = .success(
+            SpeechToTextModel(
+                text: "Автоматическая остановка",
+                language: "ru-RU",
+                durationMs: 30_000,
+                confidence: nil
+            )
+        )
+
+        await loadSettings(in: context)
+
+        let speechRendered = expectation(description: "Recording limit speech rendered")
+        context.view.onRecognizedSpeech = { speechRendered.fulfill() }
+        XCTAssertTrue(context.presenter.didRequestStartVoiceRecording())
+        await fulfillment(of: [speechRendered], timeout: 1)
+
+        XCTAssertEqual(context.audioRecordingService.startCallCount, 1)
+        XCTAssertEqual(context.audioRecordingService.stopCallCount, 1)
+        XCTAssertEqual(context.speechRecognitionService.requests.count, 1)
+        XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
+    }
+
+    func testViewLoadDoesNotStartPushToTalkRecordingAutomatically() async {
+        var settings = AppSettings.defaultValue
+        settings.privacyMode = .standard
+        settings.autoStartMicrophone = true
+        settings.transcriptFontScale = 1.25
+
+        let context = makeContext(settings: settings)
+
+        await loadSettings(in: context)
+
+        XCTAssertEqual(context.audioRecordingService.startCallCount, 0)
+        XCTAssertEqual(context.speechRecognitionService.requests.count, 0)
+        XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
+    }
+
+    func testNetworkRecognitionErrorExplainsOfflineFallback() async {
+        var settings = AppSettings.defaultValue
+        settings.privacyMode = .standard
+        settings.autoStartMicrophone = false
+        settings.transcriptFontScale = 1.25
+
+        let context = makeContext(settings: settings)
+        context.audioRecordingService.recordingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("presenter-network-error.wav")
+        context.speechRecognitionService.result = .failure(AppError.networkUnavailable)
+
+        await loadSettings(in: context)
+
+        let recordingStarted = expectation(description: "Recording started")
+        context.view.onRender = { viewModel in
+            if viewModel.voiceInputState == .recording {
+                recordingStarted.fulfill()
+            }
+        }
+        context.presenter.didRequestStartVoiceRecording()
+        await fulfillment(of: [recordingStarted], timeout: 1)
+        context.view.onRender = nil
+
+        let errorRendered = expectation(description: "Network error rendered")
+        context.view.onError = { errorRendered.fulfill() }
+        context.presenter.didRequestStopVoiceRecording()
+        await fulfillment(of: [errorRendered], timeout: 1)
+
+        XCTAssertEqual(
+            context.view.errors.last,
+            "Нет подключения к интернету. Печатный ввод и готовые фразы продолжают работать."
+        )
+        XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
+    }
+
+    func testStartingNewConversationCancelsRecognitionAndDeletesTemporaryAudio() async {
+        var settings = AppSettings.defaultValue
+        settings.privacyMode = .standard
+        settings.autoStartMicrophone = false
+        settings.transcriptFontScale = 1.25
+
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("presenter-cancelled-transcription.wav")
+        let context = makeContext(settings: settings)
+        context.audioRecordingService.recordingURL = audioURL
+
+        await loadSettings(in: context)
+
+        let recordingStarted = expectation(description: "Recording started")
+        context.view.onRender = { viewModel in
+            if viewModel.voiceInputState == .recording {
+                recordingStarted.fulfill()
+            }
+        }
+        context.presenter.didRequestStartVoiceRecording()
+        await fulfillment(of: [recordingStarted], timeout: 1)
+        context.view.onRender = nil
+
+        context.presenter.didRequestStopVoiceRecording()
+        XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .recognizing)
+
+        context.presenter.didRequestNewConversation()
+
+        XCTAssertEqual(context.speechRecognitionService.cancelCallCount, 1)
+        XCTAssertEqual(context.audioRecordingService.discardedURLs, [audioURL])
+        XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
+        XCTAssertEqual(context.view.clearCallCount, 1)
+    }
+
     private func makeContext(
-        repository: ConversationRepositoryStub = ConversationRepositoryStub()
+        repository: ConversationRepositoryStub = ConversationRepositoryStub(),
+        settings: AppSettings = .defaultValue,
+        maximumRecordingDuration: TimeInterval = 30
     ) -> (
         presenter: ConversationPresenter,
         view: ConversationViewSpy,
-        textToSpeechService: TextToSpeechServiceSpy
+        textToSpeechService: TextToSpeechServiceSpy,
+        audioRecordingService: AudioRecordingServiceStub,
+        speechRecognitionService: SpeechRecognitionServiceStub
     ) {
         let view = ConversationViewSpy()
-        let settingsRepository = SettingsRepositoryStub()
+        let settingsRepository = SettingsRepositoryStub(settings: settings)
         let textToSpeechService = TextToSpeechServiceSpy()
+        let audioRecordingService = AudioRecordingServiceStub()
+        let speechRecognitionService = SpeechRecognitionServiceStub()
         let presenter = ConversationPresenter(
             view: view,
             microphonePermissionService: MicrophonePermissionServiceStub(),
-            audioRecordingService: AudioRecordingServiceStub(),
-            speechRecognitionService: SpeechRecognitionServiceStub(),
+            audioRecordingService: audioRecordingService,
+            speechRecognitionService: speechRecognitionService,
             textToSpeechService: textToSpeechService,
             fetchSettingsUseCase: FetchSettingsUseCase(repository: settingsRepository),
             fetchConversationUseCase: FetchConversationUseCase(repository: repository),
             fetchConversationMessagesUseCase: FetchConversationMessagesUseCase(repository: repository),
             saveConversationUseCase: SaveConversationUseCase(repository: repository),
-            addConversationMessageUseCase: AddConversationMessageUseCase(repository: repository)
+            addConversationMessageUseCase: AddConversationMessageUseCase(repository: repository),
+            maximumRecordingDuration: maximumRecordingDuration
         )
-        return (presenter, view, textToSpeechService)
+        return (
+            presenter,
+            view,
+            textToSpeechService,
+            audioRecordingService,
+            speechRecognitionService
+        )
+    }
+
+    private func loadSettings(
+        in context: (
+            presenter: ConversationPresenter,
+            view: ConversationViewSpy,
+            textToSpeechService: TextToSpeechServiceSpy,
+            audioRecordingService: AudioRecordingServiceStub,
+            speechRecognitionService: SpeechRecognitionServiceStub
+        )
+    ) async {
+        let settingsLoaded = expectation(description: "Settings loaded")
+        context.view.onRender = { viewModel in
+            if viewModel.transcriptFontScale == 1.25 {
+                settingsLoaded.fulfill()
+            }
+        }
+        context.presenter.viewDidLoad()
+        await fulfillment(of: [settingsLoaded], timeout: 1)
+        context.view.onRender = nil
     }
 }

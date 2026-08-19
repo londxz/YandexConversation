@@ -19,9 +19,15 @@
 			</array>
 		</dict>
 	</dict>
-    
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Доступ к микрофону нужен, чтобы показывать речь собеседника текстом.</string>
+
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Доступ к микрофону нужен, чтобы показывать речь собеседника текстом.</string>
 
 	<key>UIAppFonts</key>
 	<array>

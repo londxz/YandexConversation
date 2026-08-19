@@ -40,6 +40,10 @@ extension ChatVC: ConversationView {
         segmentControlComponent.setSelectedIndex(viewModel.mode.segmentIndex)
         talkVC.applyTranscriptFontScale(viewModel.transcriptFontScale)
         listenVC.applyTranscriptFontScale(viewModel.transcriptFontScale)
+        topChatComponent.applyMicrophoneActivity(
+            isActive: viewModel.isMicrophoneAvailable
+        )
+        chatComponent.applyVoiceInputState(viewModel.voiceInputState)
 
         if !viewModel.isInputVisible {
             hideQuickPhrasePanel(animated: false)
@@ -108,7 +112,7 @@ extension ChatVC: ConversationView {
         dismissLargeTextDisplayIfNeeded()
         hideQuickPhrasePanel(animated: false)
         chatComponent.textField.text = nil
-        chatComponent.resetVoiceInputState()
+        chatComponent.applyVoiceInputState(.idle)
         talkVC.clearMessages()
         listenVC.clearTranscript()
     }
@@ -142,9 +146,9 @@ extension ChatVC: ChatComponentDelegate {
     }
 
     func chatComponentDidRequestStartVoiceRecording(_ component: ChatComponent) {
-        if !presenter.didRequestStartVoiceRecording() {
-            component.resetVoiceInputState()
-        }
+        view.endEditing(true)
+        hideQuickPhrasePanel(animated: true)
+        presenter.didRequestStartVoiceRecording()
     }
 
     func chatComponentDidRequestStopVoiceRecording(_ component: ChatComponent) {
@@ -165,8 +169,6 @@ extension ChatVC: ChatComponentDelegate {
     }
 
     func displayConversationError(_ message: String) {
-        chatComponent.resetVoiceInputState()
-
         let alert = UIAlertController(
             title: "Что-то пошло не так",
             message: message,

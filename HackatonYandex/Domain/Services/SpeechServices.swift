@@ -13,7 +13,14 @@ protocol AudioRecordingService: AnyObject {
     func discardRecording(at fileURL: URL)
 }
 
+enum MicrophonePermissionStatus {
+    case undetermined
+    case granted
+    case denied
+}
+
 protocol MicrophonePermissionService: AnyObject {
+    var authorizationStatus: MicrophonePermissionStatus { get }
     func requestPermission(completion: @escaping (Bool) -> Void)
 }
 
@@ -21,8 +28,10 @@ protocol SpeechRecognitionService: AnyObject {
     func transcribeAudio(
         fileURL: URL,
         language: String,
+        conversationId: String,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
     )
+    func cancelTranscription()
 }
 
 struct TextToSpeechVoice: Equatable {

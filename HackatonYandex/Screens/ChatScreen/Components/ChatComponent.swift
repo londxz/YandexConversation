@@ -32,44 +32,49 @@ class ChatComponent: UIView {
         let btn = UIButton(type: .system)
         btn.setImage(UIImage(named: "rightChatButton")?.withRenderingMode(.alwaysOriginal), for: .normal)
         btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.accessibilityLabel = "Отправить сообщение"
+        btn.accessibilityHint = "Удерживайте кнопку, чтобы записать речь"
 
         return btn
     }()
-    
+
     lazy var speakRightButton: UIButton = {
         let btn = UIButton(type: .system)
         btn.setImage(UIImage(named: "speakRightChatButton")?.withRenderingMode(.alwaysOriginal), for: .normal)
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.isHidden = true
-        
+        btn.accessibilityLabel = "Остановить запись"
+
         return btn
     }()
+
+    private let recognitionActivityIndicator = UIActivityIndicatorView(style: .medium)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupView()
-        textField.delegate = self
-
-        let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-        longPressRecognizer.cancelsTouchesInView = true
-        textRightButton.addGestureRecognizer(longPressRecognizer)
-        
-        textRightButton.addTarget(self, action: #selector(sendTextButtonTapped), for: .touchUpInside)
-        speakRightButton.addTarget(self, action: #selector(speakButtonTapped), for: .touchUpInside)
-        leftButton.addTarget(self, action: #selector(quickPhrasesButtonTapped), for: .touchUpInside)
+        setupInteractions()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupView()
+        setupInteractions()
+    }
+
+    private func setupInteractions() {
         textField.delegate = self
-        
-        let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+
+        let longPressRecognizer = UILongPressGestureRecognizer(
+            target: self,
+            action: #selector(handleLongPress(_:))
+        )
+        longPressRecognizer.minimumPressDuration = 0.45
         longPressRecognizer.cancelsTouchesInView = true
         textRightButton.addGestureRecognizer(longPressRecognizer)
 
         textRightButton.addTarget(self, action: #selector(sendTextButtonTapped), for: .touchUpInside)
-        speakRightButton.addTarget(self, action: #selector(speakButtonTapped), for: .touchUpInside)
+        speakRightButton.addTarget(self, action: #selector(stopVoiceRecordingButtonTapped), for: .touchUpInside)
         leftButton.addTarget(self, action: #selector(quickPhrasesButtonTapped), for: .touchUpInside)
     }
 
@@ -94,7 +99,9 @@ class ChatComponent: UIView {
         textField.leftView = paddingView
         textField.leftViewMode = .always
         
-        let stackView = UIStackView(arrangedSubviews: [leftButton, textField, textRightButton, speakRightButton])
+        let stackView = UIStackView(
+            arrangedSubviews: [leftButton, textField, textRightButton, speakRightButton]
+        )
         stackView.axis = .horizontal
         stackView.spacing = 8
         stackView.alignment = .center
@@ -115,31 +122,72 @@ class ChatComponent: UIView {
             
             textRightButton.heightAnchor.constraint(equalTo: textField.heightAnchor),
             textRightButton.widthAnchor.constraint(equalTo: textRightButton.heightAnchor),
-            
+
             speakRightButton.heightAnchor.constraint(equalTo: textField.heightAnchor),
             speakRightButton.widthAnchor.constraint(equalTo: speakRightButton.heightAnchor)
         ])
+
+        speakRightButton.addSubview(recognitionActivityIndicator)
+        recognitionActivityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        recognitionActivityIndicator.hidesWhenStopped = true
+        NSLayoutConstraint.activate([
+            recognitionActivityIndicator.centerXAnchor.constraint(equalTo: speakRightButton.centerXAnchor),
+            recognitionActivityIndicator.centerYAnchor.constraint(equalTo: speakRightButton.centerYAnchor)
+        ])
     }
-    
+
+    func applyVoiceInputState(_ state: ConversationVoiceInputState) {
+        stopRecordingAnimation()
+        recognitionActivityIndicator.stopAnimating()
+        speakRightButton.alpha = 1
+        speakRightButton.isEnabled = false
+        speakRightButton.setImage(
+            UIImage(named: "speakRightChatButton")?.withRenderingMode(.alwaysOriginal),
+            for: .normal
+        )
+
+        switch state {
+        case .idle:
+            textRightButton.isHidden = false
+            speakRightButton.isHidden = true
+            textRightButton.isEnabled = true
+        case .requestingPermission:
+            textRightButton.isHidden = true
+            speakRightButton.isHidden = false
+            speakRightButton.accessibilityLabel = "Подготовка записи"
+            speakRightButton.accessibilityValue = nil
+        case .recording:
+            textRightButton.isHidden = true
+            speakRightButton.isHidden = false
+            speakRightButton.isEnabled = true
+            speakRightButton.accessibilityLabel = "Остановить запись"
+            speakRightButton.accessibilityValue = "Идёт запись"
+            startRecordingAnimation()
+        case .recognizing:
+            textRightButton.isHidden = true
+            speakRightButton.isHidden = false
+            speakRightButton.setImage(nil, for: .normal)
+            speakRightButton.accessibilityLabel = "Распознавание речи"
+            speakRightButton.accessibilityValue = "Обработка записи"
+            recognitionActivityIndicator.startAnimating()
+        }
+    }
+
     private func startRecordingAnimation() {
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+
         let pulse = CABasicAnimation(keyPath: "transform.scale")
-        pulse.fromValue = 1.0
+        pulse.fromValue = 1
         pulse.toValue = 1.15
         pulse.duration = 0.6
         pulse.autoreverses = true
         pulse.repeatCount = .infinity
         pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        speakRightButton.layer.add(pulse, forKey: "pulse")
+        speakRightButton.layer.add(pulse, forKey: "recordingPulse")
     }
 
     private func stopRecordingAnimation() {
-        speakRightButton.layer.removeAnimation(forKey: "pulse")
-    }
-
-    func resetVoiceInputState() {
-        speakRightButton.isHidden = true
-        textRightButton.isHidden = false
-        stopRecordingAnimation()
+        speakRightButton.layer.removeAnimation(forKey: "recordingPulse")
     }
 
     private func submitTextFromField() {
@@ -151,23 +199,17 @@ class ChatComponent: UIView {
         textField.resignFirstResponder()
     }
     
-    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-        if gesture.state == .began {
-            textRightButton.isHidden = true
-            speakRightButton.isHidden = false
-            startRecordingAnimation()
-            delegate?.chatComponentDidRequestStartVoiceRecording(self)
-        }
-    }
-
-
-    @objc private func speakButtonTapped() {
-        resetVoiceInputState()
-        delegate?.chatComponentDidRequestStopVoiceRecording(self)
-    }
-
     @objc private func sendTextButtonTapped() {
         submitTextFromField()
+    }
+
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        delegate?.chatComponentDidRequestStartVoiceRecording(self)
+    }
+
+    @objc private func stopVoiceRecordingButtonTapped() {
+        delegate?.chatComponentDidRequestStopVoiceRecording(self)
     }
 
     @objc private func quickPhrasesButtonTapped() {

@@ -36,9 +36,11 @@ struct ConversationViewModel {
     let mode: ConversationMode
     let isInputVisible: Bool
     let transcriptFontScale: Float
+    let isMicrophoneAvailable: Bool
+    let voiceInputState: ConversationVoiceInputState
 }
 
-private enum VoiceInputState {
+enum ConversationVoiceInputState: Equatable {
     case idle
     case requestingPermission
     case recording
@@ -72,10 +74,14 @@ final class ConversationPresenter {
     private let fetchConversationMessagesUseCase: FetchConversationMessagesUseCase
     private let saveConversationUseCase: SaveConversationUseCase
     private let addConversationMessageUseCase: AddConversationMessageUseCase
+    private let maximumRecordingDuration: TimeInterval
     private var mode: ConversationMode = .talk
-    private var voiceInputState: VoiceInputState = .idle
+    private var voiceInputState: ConversationVoiceInputState = .idle
     private var currentConversation: Conversation
     private var hasPersistedConversation = false
+    private var hasConversationMessages = false
+    private var recordingLimitTask: Task<Void, Never>?
+    private var pendingTranscriptionFileURL: URL?
     private var settings = AppSettings.defaultValue
 
     init(
@@ -88,7 +94,8 @@ final class ConversationPresenter {
         fetchConversationUseCase: FetchConversationUseCase,
         fetchConversationMessagesUseCase: FetchConversationMessagesUseCase,
         saveConversationUseCase: SaveConversationUseCase,
-        addConversationMessageUseCase: AddConversationMessageUseCase
+        addConversationMessageUseCase: AddConversationMessageUseCase,
+        maximumRecordingDuration: TimeInterval = 30
     ) {
         self.view = view
         self.microphonePermissionService = microphonePermissionService
@@ -100,6 +107,7 @@ final class ConversationPresenter {
         self.fetchConversationMessagesUseCase = fetchConversationMessagesUseCase
         self.saveConversationUseCase = saveConversationUseCase
         self.addConversationMessageUseCase = addConversationMessageUseCase
+        self.maximumRecordingDuration = maximumRecordingDuration
         self.currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
     }
 
@@ -113,6 +121,7 @@ final class ConversationPresenter {
     }
 
     func viewDidDisappear() {
+        stopActiveVoiceInputIfNeeded()
         view?.hideConversationHints()
         view?.dismissLargeTextDisplay()
     }
@@ -131,6 +140,7 @@ final class ConversationPresenter {
         if hasPersistedConversation {
             persistCurrentConversation()
         }
+
     }
 
     func didTapMicrophoneHint() {
@@ -152,24 +162,25 @@ final class ConversationPresenter {
             return false
         }
 
-        voiceInputState = .requestingPermission
+        transitionVoiceInput(to: .requestingPermission)
         microphonePermissionService.requestPermission { [weak self] isGranted in
             DispatchQueue.main.async {
                 guard let self else { return }
                 guard self.voiceInputState == .requestingPermission else { return }
 
                 guard isGranted else {
-                    self.voiceInputState = .idle
+                    self.transitionVoiceInput(to: .idle)
                     self.view?.displayConversationError("Разрешите доступ к микрофону в настройках iOS.")
                     return
                 }
 
                 do {
                     try self.audioRecordingService.startRecording()
-                    self.voiceInputState = .recording
+                    self.transitionVoiceInput(to: .recording)
+                    self.scheduleRecordingLimit(for: self.currentConversation.id)
                 } catch {
                     AppLogger.error("Failed to start recording: \(error.localizedDescription)")
-                    self.voiceInputState = .idle
+                    self.transitionVoiceInput(to: .idle)
                     self.view?.displayConversationError("Не удалось включить запись.")
                 }
             }
@@ -180,7 +191,7 @@ final class ConversationPresenter {
 
     func didRequestStopVoiceRecording() {
         if voiceInputState == .requestingPermission {
-            voiceInputState = .idle
+            transitionVoiceInput(to: .idle)
             return
         }
 
@@ -188,32 +199,52 @@ final class ConversationPresenter {
             return
         }
 
+        finishVoiceRecording(expectedConversationId: currentConversation.id)
+    }
+
+    private func finishVoiceRecording(expectedConversationId: String) {
+        guard voiceInputState == .recording,
+              currentConversation.id == expectedConversationId else {
+            return
+        }
+
+        cancelRecordingLimit()
+
         guard let fileURL = audioRecordingService.stopRecording() else {
-            voiceInputState = .idle
+            transitionVoiceInput(to: .idle)
             view?.displayConversationError("Не удалось найти записанный аудиофайл.")
             return
         }
 
-        voiceInputState = .recognizing
+        transitionVoiceInput(to: .recognizing)
         let conversationId = currentConversation.id
         let audioRecordingService = audioRecordingService
+        pendingTranscriptionFileURL = fileURL
         speechRecognitionService.transcribeAudio(
             fileURL: fileURL,
-            language: settings.recognitionLanguage
+            language: settings.recognitionLanguage,
+            conversationId: conversationId
         ) { [weak self] result in
             DispatchQueue.main.async {
-                audioRecordingService.discardRecording(at: fileURL)
-                guard let self else { return }
+                guard let self else {
+                    audioRecordingService.discardRecording(at: fileURL)
+                    return
+                }
+                if self.pendingTranscriptionFileURL == fileURL {
+                    audioRecordingService.discardRecording(at: fileURL)
+                    self.pendingTranscriptionFileURL = nil
+                }
                 guard self.currentConversation.id == conversationId else { return }
+                guard self.voiceInputState == .recognizing else { return }
 
-                self.voiceInputState = .idle
+                self.transitionVoiceInput(to: .idle)
 
                 switch result {
                 case .success(let model):
-                    self.handleRecognizedSpeech(model.text)
+                    self.handleRecognizedSpeech(model)
                 case .failure(let error):
                     AppLogger.error("Speech recognition failed: \(error.localizedDescription)")
-                    self.view?.displayConversationError("Не удалось распознать речь.")
+                    self.view?.displayConversationError(self.message(forSpeechError: error))
                 }
             }
         }
@@ -231,6 +262,7 @@ final class ConversationPresenter {
         stopActiveVoiceInputIfNeeded()
         currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
         hasPersistedConversation = false
+        hasConversationMessages = false
 
         view?.hideConversationHints()
         view?.dismissLargeTextDisplay()
@@ -258,6 +290,7 @@ final class ConversationPresenter {
                 self.currentConversation = conversation
                 self.mode = ConversationMode(domainMode: conversation.mode)
                 self.hasPersistedConversation = true
+                self.hasConversationMessages = !messages.isEmpty
                 self.view?.hideConversationHints()
                 self.view?.dismissLargeTextDisplay()
                 self.view?.clearConversationMessages()
@@ -291,7 +324,9 @@ final class ConversationPresenter {
             ConversationViewModel(
                 mode: mode,
                 isInputVisible: mode == .talk,
-                transcriptFontScale: settings.transcriptFontScale
+                transcriptFontScale: settings.transcriptFontScale,
+                isMicrophoneAvailable: microphonePermissionService.authorizationStatus == .granted,
+                voiceInputState: voiceInputState
             )
         )
     }
@@ -303,13 +338,14 @@ final class ConversationPresenter {
         view?.displayStartTypingHint()
     }
 
-    private func handleRecognizedSpeech(_ text: String) {
-        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func handleRecognizedSpeech(_ model: SpeechToTextModel) {
+        let normalizedText = model.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             view?.displayConversationError("Речь не распознана.")
             return
         }
 
+        hasConversationMessages = true
         view?.hideConversationHints()
         view?.displayRecognizedSpeech(normalizedText)
         persistMessage(
@@ -317,7 +353,7 @@ final class ConversationPresenter {
             source: .externalSpeech,
             speakerId: nil,
             speakerLabel: "Говорящий 1",
-            audioDurationMs: nil
+            audioDurationMs: model.durationMs
         )
     }
 
@@ -330,6 +366,7 @@ final class ConversationPresenter {
             return
         }
 
+        hasConversationMessages = true
         view?.hideConversationHints()
         view?.displaySubmittedText(normalizedText)
         persistMessage(
@@ -398,16 +435,22 @@ final class ConversationPresenter {
     }
 
     private func stopActiveVoiceInputIfNeeded() {
+        cancelRecordingLimit()
+
         switch voiceInputState {
         case .idle:
             break
-        case .requestingPermission, .recognizing:
-            voiceInputState = .idle
+        case .requestingPermission:
+            transitionVoiceInput(to: .idle)
+        case .recognizing:
+            speechRecognitionService.cancelTranscription()
+            discardPendingTranscriptionFile()
+            transitionVoiceInput(to: .idle)
         case .recording:
             if let fileURL = audioRecordingService.stopRecording() {
                 audioRecordingService.discardRecording(at: fileURL)
             }
-            voiceInputState = .idle
+            transitionVoiceInput(to: .idle)
         }
     }
 
@@ -420,6 +463,63 @@ final class ConversationPresenter {
             } catch {
                 AppLogger.error("Failed to refresh conversation settings: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func transitionVoiceInput(to state: ConversationVoiceInputState) {
+        guard voiceInputState != state else { return }
+        voiceInputState = state
+        renderCurrentMode()
+    }
+
+    private func scheduleRecordingLimit(for conversationId: String) {
+        cancelRecordingLimit()
+
+        let duration = max(0, maximumRecordingDuration)
+        let nanoseconds = UInt64(duration * 1_000_000_000)
+        recordingLimitTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            self?.finishVoiceRecording(expectedConversationId: conversationId)
+        }
+    }
+
+    private func cancelRecordingLimit() {
+        recordingLimitTask?.cancel()
+        recordingLimitTask = nil
+    }
+
+    private func discardPendingTranscriptionFile() {
+        guard let fileURL = pendingTranscriptionFileURL else { return }
+        audioRecordingService.discardRecording(at: fileURL)
+        pendingTranscriptionFileURL = nil
+    }
+
+    private func message(forSpeechError error: Error) -> String {
+        guard let appError = error as? AppError else {
+            return "Не удалось распознать речь. Попробуйте ещё раз."
+        }
+
+        switch appError {
+        case .networkUnavailable:
+            return "Нет подключения к интернету. Печатный ввод и готовые фразы продолжают работать."
+        case .apiError(let code, _, _):
+            switch code {
+            case "speech_unavailable":
+                return "Распознавание речи временно недоступно. Попробуйте позже."
+            case "speech_busy":
+                return "Сервис распознавания занят. Повторите через несколько секунд."
+            case "audio_too_long":
+                return "Запись получилась слишком длинной. Говорите не больше 30 секунд."
+            case "unsupported_language":
+                return "Выбранный язык пока не поддерживается распознаванием."
+            default:
+                return "Не удалось распознать речь. Попробуйте ещё раз."
+            }
+        case .speechUnavailable:
+            return "Распознавание речи временно недоступно. Попробуйте позже."
+        default:
+            return "Не удалось распознать речь. Попробуйте ещё раз."
         }
     }
 

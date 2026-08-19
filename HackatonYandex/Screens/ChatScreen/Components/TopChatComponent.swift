@@ -8,11 +8,13 @@
 import UIKit
 
 class TopChatComponent: UIView {
-    
     lazy var microNavButton: UIButton = {
         let btn = UIButton(type: .system)
-        btn.setImage(UIImage(named: "microNavBarIcon")?.withRenderingMode(.alwaysOriginal), for: .normal)
         btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.isUserInteractionEnabled = false
+        btn.isAccessibilityElement = true
+        btn.layer.cornerRadius = 24
+        btn.imageView?.contentMode = .center
 
         return btn
     }()
@@ -66,5 +68,30 @@ class TopChatComponent: UIView {
             rightNavButton.widthAnchor.constraint(equalToConstant: 24),
             rightNavButton.heightAnchor.constraint(equalTo: leftNavButton.widthAnchor)
         ])
+
+        applyMicrophoneActivity(isActive: false)
+    }
+
+    func applyMicrophoneActivity(isActive: Bool) {
+        if isActive {
+            microNavButton.backgroundColor = .clear
+            microNavButton.setImage(Self.microphoneImage, for: .normal)
+            microNavButton.tintColor = nil
+            microNavButton.accessibilityLabel = "Микрофон включён"
+        } else {
+            let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+            microNavButton.backgroundColor = UIColor(red: 1, green: 0.88, blue: 0.88, alpha: 1)
+            microNavButton.setImage(
+                UIImage(systemName: "mic.slash.fill", withConfiguration: symbolConfiguration),
+                for: .normal
+            )
+            microNavButton.tintColor = UIColor(red: 0.80, green: 0.12, blue: 0.12, alpha: 1)
+            microNavButton.accessibilityLabel = "Микрофон выключен"
+        }
+        microNavButton.accessibilityTraits = [.image, .updatesFrequently]
+    }
+
+    private static var microphoneImage: UIImage? {
+        UIImage(named: "microNavBarIcon")?.withRenderingMode(.alwaysOriginal)
     }
 }

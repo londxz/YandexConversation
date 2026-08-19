@@ -15,7 +15,7 @@ class ChatVC: UIViewController {
     var isQuickPhrasePanelVisible = false
     let container: AppContainer
     
-    private let topChatComponent = TopChatComponent()
+    let topChatComponent = TopChatComponent()
     private let containerView = UIView()
     let segmentControlComponent = SegmentControlComponent()
     let chatComponent = ChatComponent()

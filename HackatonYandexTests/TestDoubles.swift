@@ -59,6 +59,10 @@ final class SettingsRepositoryStub: SettingsRepository {
 final class MicrophonePermissionServiceStub: MicrophonePermissionService {
     var isGranted = true
 
+    var authorizationStatus: MicrophonePermissionStatus {
+        isGranted ? .granted : .denied
+    }
+
     func requestPermission(completion: @escaping (Bool) -> Void) {
         completion(isGranted)
     }
@@ -66,22 +70,60 @@ final class MicrophonePermissionServiceStub: MicrophonePermissionService {
 
 final class AudioRecordingServiceStub: AudioRecordingService {
     var recordingURL: URL?
+    var startError: Error?
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+    private(set) var discardedURLs: [URL] = []
 
-    func startRecording() throws {}
-
-    func stopRecording() -> URL? {
-        recordingURL
+    func startRecording() throws {
+        startCallCount += 1
+        if let startError {
+            throw startError
+        }
     }
 
-    func discardRecording(at fileURL: URL) {}
+    func stopRecording() -> URL? {
+        stopCallCount += 1
+        return recordingURL
+    }
+
+    func discardRecording(at fileURL: URL) {
+        discardedURLs.append(fileURL)
+    }
 }
 
 final class SpeechRecognitionServiceStub: SpeechRecognitionService {
+    struct Request: Equatable {
+        let fileURL: URL
+        let language: String
+        let conversationId: String
+    }
+
+    var result: Result<SpeechToTextModel, Error>?
+    private(set) var requests: [Request] = []
+    private(set) var cancelCallCount = 0
+
     func transcribeAudio(
         fileURL: URL,
         language: String,
+        conversationId: String,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
-    ) {}
+    ) {
+        requests.append(
+            Request(
+                fileURL: fileURL,
+                language: language,
+                conversationId: conversationId
+            )
+        )
+        if let result {
+            completion(result)
+        }
+    }
+
+    func cancelTranscription() {
+        cancelCallCount += 1
+    }
 }
 
 final class TextToSpeechServiceSpy: TextToSpeechService {
@@ -117,10 +159,15 @@ final class ConversationViewSpy: ConversationView {
     private(set) var displayedMessages: [ConversationMessage] = []
     private(set) var clearCallCount = 0
     private(set) var errors: [String] = []
+    private(set) var recognizedTexts: [String] = []
     var onDisplayMessages: (() -> Void)?
+    var onRecognizedSpeech: (() -> Void)?
+    var onError: (() -> Void)?
+    var onRender: ((ConversationViewModel) -> Void)?
 
     func render(_ viewModel: ConversationViewModel) {
         renderedModels.append(viewModel)
+        onRender?(viewModel)
     }
 
     func displayStartTypingHint() {}
@@ -132,10 +179,14 @@ final class ConversationViewSpy: ConversationView {
     }
 
     func dismissLargeTextDisplay() {}
-    func displayRecognizedSpeech(_ text: String) {}
+    func displayRecognizedSpeech(_ text: String) {
+        recognizedTexts.append(text)
+        onRecognizedSpeech?()
+    }
 
     func displayConversationError(_ message: String) {
         errors.append(message)
+        onError?()
     }
 
     func displaySubmittedText(_ text: String) {
