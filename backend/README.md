@@ -9,6 +9,10 @@ docker compose up --build -d
 curl -i http://localhost:8080/v1/health
 ```
 
+The first build compiles the pinned `whisper.cpp` release and downloads the
+multilingual `base` model. The local stack then starts PostgreSQL, migrations,
+the non-public Whisper sidecar, and the Go API without any cloud credentials.
+
 Compose exposes PostgreSQL on `localhost:5433` by default to avoid colliding
 with a locally installed PostgreSQL. Override `POSTGRES_PORT` or `API_PORT`
 when needed.
@@ -25,17 +29,11 @@ Expected response:
 
 ## Test from the iOS app
 
-Start the local stack, then add these environment variables to the Xcode Run
-scheme for a Debug build:
-
-```text
-RAZGOVOR_API_BASE_URL=http://127.0.0.1:8080
-RAZGOVOR_EAGER_DEVICE_REGISTRATION=1
-```
-
-Run the app in iOS Simulator. The eager-registration flag is compiled only in
-Debug and exists solely for local integration checks. Production builds create
-the anonymous device session lazily on the first backend request.
+Start the local stack and run the Debug app in iOS Simulator. Debug builds use
+`http://127.0.0.1:8080` by default, while staging and production keep their HTTPS
+URLs. `RAZGOVOR_API_BASE_URL` remains available as a Run-scheme override for a
+physical device or another environment. The app creates its anonymous device
+session lazily on the first backend request.
 
 Verify that the app registered exactly one device:
 
@@ -72,19 +70,13 @@ written to logs.
 Each API instance also bounds concurrent recognition calls; excess requests
 receive `429 speech_busy` with `Retry-After: 1`.
 
-For local recognition through Yandex SpeechKit, export a service-account API
-key before starting Compose:
-
-```bash
-export SPEECH_PROVIDER=yandex
-export YANDEX_SPEECHKIT_API_KEY='<secret API key>'
-docker compose up --build -d
-```
-
-The service account must have SpeechKit STT permission. Keep the API key out of
-`.env` files committed to Git; staging and production must inject it from their
-secret manager. With `SPEECH_PROVIDER=disabled`, the endpoint responds with
-`503 speech_unavailable` while all offline iOS features remain available.
+The default flow is backend-first: iOS sends the completed push-to-talk WAV to
+the authenticated Go endpoint, which validates it and calls the private
+`whisper.cpp` sidecar. If the backend is unavailable, iOS automatically retries
+the same recording through Apple Speech. Privacy mode bypasses the backend and
+requires on-device Apple recognition. No cloud speech key or metered STT API is
+required. `SPEECH_PROVIDER=disabled` remains available for deployments that
+want the endpoint to return `503 speech_unavailable` and rely on the iOS fallback.
 
 Registration and refresh require a unique `Idempotency-Key` containing 16 to
 100 visible ASCII characters. Protected routes use

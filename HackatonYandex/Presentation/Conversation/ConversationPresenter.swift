@@ -155,13 +155,6 @@ final class ConversationPresenter {
             return false
         }
 
-        guard settings.privacyMode != .localOnly else {
-            view?.displayConversationError(
-                "Распознавание через сервер отключено в настройках конфиденциальности."
-            )
-            return false
-        }
-
         transitionVoiceInput(to: .requestingPermission)
         microphonePermissionService.requestPermission { [weak self] isGranted in
             DispatchQueue.main.async {
@@ -223,7 +216,10 @@ final class ConversationPresenter {
         speechRecognitionService.transcribeAudio(
             fileURL: fileURL,
             language: settings.recognitionLanguage,
-            conversationId: conversationId
+            conversationId: conversationId,
+            processingMode: settings.privacyMode == .localOnly
+                ? .onDeviceOnly
+                : .allowSystemNetworkFallback
         ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else {
@@ -501,8 +497,12 @@ final class ConversationPresenter {
         }
 
         switch appError {
+        case .permissionDenied:
+            return "Разрешите распознавание речи в настройках iOS."
+        case .onDeviceRecognitionUnavailable:
+            return "На этом устройстве выбранный язык нельзя распознавать офлайн. Отключите режим «Только на устройстве» или выберите другой язык."
         case .networkUnavailable:
-            return "Нет подключения к интернету. Печатный ввод и готовые фразы продолжают работать."
+            return "Для выбранного языка сейчас нужен интернет. Печатный ввод и готовые фразы продолжают работать."
         case .apiError(let code, _, _):
             switch code {
             case "speech_unavailable":

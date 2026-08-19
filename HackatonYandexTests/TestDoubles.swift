@@ -97,6 +97,7 @@ final class SpeechRecognitionServiceStub: SpeechRecognitionService {
         let fileURL: URL
         let language: String
         let conversationId: String
+        let processingMode: SpeechRecognitionProcessingMode
     }
 
     var result: Result<SpeechToTextModel, Error>?
@@ -107,13 +108,15 @@ final class SpeechRecognitionServiceStub: SpeechRecognitionService {
         fileURL: URL,
         language: String,
         conversationId: String,
+        processingMode: SpeechRecognitionProcessingMode,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
     ) {
         requests.append(
             Request(
                 fileURL: fileURL,
                 language: language,
-                conversationId: conversationId
+                conversationId: conversationId,
+                processingMode: processingMode
             )
         )
         if let result {

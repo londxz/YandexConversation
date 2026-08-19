@@ -270,19 +270,19 @@ final class SettingsPresenter {
             SettingsViewModel.Section(
                 title: "Конфиденциальность",
                 footer: settings.privacyMode == .localOnly
-                    ? "В локальном режиме данные не отправляются для синхронизации."
-                    : nil,
+                    ? "Аудио распознается только на устройстве и не отправляется по сети. Доступность зависит от языка и модели iPhone."
+                    : "Аудио отправляется на сервер приложения для распознавания и не сохраняется. Если сервер недоступен, используется Apple Speech.",
                 rows: [
                     toggleRow(
                         id: .localOnly,
                         title: "Только на устройстве",
-                        subtitle: "Запретить синхронизацию данных",
+                        subtitle: "Не отправлять аудио и данные по сети",
                         isOn: settings.privacyMode == .localOnly
                     ),
                     SettingsViewModel.Row(
                         id: .sync,
                         title: "Синхронизация",
-                        subtitle: "Будет доступна после подключения сервера",
+                        subtitle: "Пока недоступна",
                         accessory: .toggle(isOn: false),
                         isEnabled: false,
                         isDestructive: false

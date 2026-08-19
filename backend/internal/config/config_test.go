@@ -34,6 +34,9 @@ func TestLoadUsesProductionDefaults(t *testing.T) {
 	if config.Speech.Provider != "disabled" {
 		t.Fatalf("Speech provider = %q, want disabled", config.Speech.Provider)
 	}
+	if config.Speech.WhisperEndpoint != "http://127.0.0.1:8081/inference" {
+		t.Fatalf("Whisper endpoint = %q", config.Speech.WhisperEndpoint)
+	}
 	if config.Speech.MaxAudioBytes != 1<<20 || config.Speech.MaxDuration != 30*time.Second {
 		t.Fatalf("Speech limits = %d bytes, %s", config.Speech.MaxAudioBytes, config.Speech.MaxDuration)
 	}
@@ -95,41 +98,55 @@ func TestLoadRejectsRefreshTTLShorterThanAccessTTL(t *testing.T) {
 	}
 }
 
-func TestLoadRequiresSpeechProviderInProduction(t *testing.T) {
+func TestLoadAllowsDisabledSpeechProviderInProduction(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
 	setTestSecrets(t)
 	t.Setenv("APP_ENV", "production")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() error = nil, want disabled production speech error")
-	}
-}
-
-func TestLoadRequiresYandexAPIKey(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
-	setTestSecrets(t)
-	t.Setenv("SPEECH_PROVIDER", "yandex")
-	t.Setenv("YANDEX_SPEECHKIT_API_KEY", "")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() error = nil, want missing SpeechKit API key error")
-	}
-}
-
-func TestLoadAcceptsConfiguredYandexProvider(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
-	setTestSecrets(t)
-	t.Setenv("SPEECH_PROVIDER", "yandex")
-	t.Setenv("YANDEX_SPEECHKIT_API_KEY", "secret-api-key")
 
 	config, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if config.Speech.Provider != "yandex" || config.Speech.YandexAPIKey != "secret-api-key" {
-		t.Fatalf("Speech config = %#v", config.Speech)
+	if config.Speech.Provider != "disabled" {
+		t.Fatalf("Speech provider = %q, want disabled", config.Speech.Provider)
+	}
+}
+
+func TestLoadAllowsConfiguredWhisperProvider(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("SPEECH_PROVIDER", "whisper")
+	t.Setenv("WHISPER_ENDPOINT", "http://whisper:8080/inference")
+
+	config, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if config.Speech.Provider != "whisper" {
+		t.Fatalf("Speech provider = %q, want whisper", config.Speech.Provider)
+	}
+}
+
+func TestLoadRejectsUnknownSpeechProvider(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("SPEECH_PROVIDER", "cloud")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want unsupported provider error")
+	}
+}
+
+func TestLoadRejectsInvalidWhisperEndpoint(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("SPEECH_PROVIDER", "whisper")
+	t.Setenv("WHISPER_ENDPOINT", "whisper:8080")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want invalid endpoint error")
 	}
 }
 
@@ -138,7 +155,6 @@ func setTestSecrets(t *testing.T) {
 	t.Setenv("TOKEN_PEPPER_BASE64", "bG9jYWwtdG9rZW4tcGVwcGVyLTMyLWJ5dGUtdmFsdWU=")
 	t.Setenv("IDEMPOTENCY_ENCRYPTION_KEY_BASE64", "bG9jYWwtaWRlbXBvdGVuY3ktMzItYnl0ZS12YWx1ZXM=")
 	t.Setenv("SPEECH_PROVIDER", "")
+	t.Setenv("WHISPER_ENDPOINT", "")
 	t.Setenv("SPEECH_SUPPORTED_LANGUAGES", "")
-	t.Setenv("YANDEX_SPEECHKIT_ENDPOINT", "")
-	t.Setenv("YANDEX_SPEECHKIT_API_KEY", "")
 }

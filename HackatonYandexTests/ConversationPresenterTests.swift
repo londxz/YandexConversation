@@ -10,6 +10,86 @@ import XCTest
 
 @MainActor
 final class ConversationPresenterTests: XCTestCase {
+    func testProductionContainerUsesBackendFirstSpeechRecognition() {
+        let container = AppContainer()
+
+        XCTAssertTrue(container.speechRecognitionService is BackendFirstSpeechRecognitionService)
+    }
+
+    func testBackendFirstRecognitionReturnsRemoteResultWithoutLocalFallback() async throws {
+        let remote = SpeechRecognitionServiceStub()
+        remote.result = .success(
+            SpeechToTextModel(text: "С сервера", language: "ru-RU", durationMs: 500, confidence: nil)
+        )
+        let local = SpeechRecognitionServiceStub()
+        let service = BackendFirstSpeechRecognitionService(remoteService: remote, localService: local)
+        let completed = expectation(description: "Remote recognition completed")
+        var recognizedText: String?
+
+        service.transcribeAudio(
+            fileURL: URL(fileURLWithPath: "/tmp/backend-first.wav"),
+            language: "ru-RU",
+            conversationId: UUID().uuidString,
+            processingMode: .allowSystemNetworkFallback
+        ) { result in
+            recognizedText = try? result.get().text
+            completed.fulfill()
+        }
+
+        await fulfillment(of: [completed], timeout: 1)
+        XCTAssertEqual(recognizedText, "С сервера")
+        XCTAssertEqual(remote.requests.count, 1)
+        XCTAssertTrue(local.requests.isEmpty)
+    }
+
+    func testBackendFirstRecognitionFallsBackToAppleAfterRemoteFailure() async {
+        let remote = SpeechRecognitionServiceStub()
+        remote.result = .failure(AppError.networkUnavailable)
+        let local = SpeechRecognitionServiceStub()
+        local.result = .success(
+            SpeechToTextModel(text: "Локально", language: "ru-RU", durationMs: 500, confidence: nil)
+        )
+        let service = BackendFirstSpeechRecognitionService(remoteService: remote, localService: local)
+        let completed = expectation(description: "Local fallback completed")
+        var recognizedText: String?
+
+        service.transcribeAudio(
+            fileURL: URL(fileURLWithPath: "/tmp/backend-fallback.wav"),
+            language: "ru-RU",
+            conversationId: UUID().uuidString,
+            processingMode: .allowSystemNetworkFallback
+        ) { result in
+            recognizedText = try? result.get().text
+            completed.fulfill()
+        }
+
+        await fulfillment(of: [completed], timeout: 1)
+        XCTAssertEqual(recognizedText, "Локально")
+        XCTAssertEqual(remote.requests.count, 1)
+        XCTAssertEqual(local.requests.first?.processingMode, .allowSystemNetworkFallback)
+    }
+
+    func testBackendFirstRecognitionKeepsLocalOnlyAudioOffBackend() async {
+        let remote = SpeechRecognitionServiceStub()
+        let local = SpeechRecognitionServiceStub()
+        local.result = .success(
+            SpeechToTextModel(text: "На устройстве", language: "ru-RU", durationMs: 500, confidence: nil)
+        )
+        let service = BackendFirstSpeechRecognitionService(remoteService: remote, localService: local)
+        let completed = expectation(description: "On-device recognition completed")
+
+        service.transcribeAudio(
+            fileURL: URL(fileURLWithPath: "/tmp/local-only.wav"),
+            language: "ru-RU",
+            conversationId: UUID().uuidString,
+            processingMode: .onDeviceOnly
+        ) { _ in completed.fulfill() }
+
+        await fulfillment(of: [completed], timeout: 1)
+        XCTAssertTrue(remote.requests.isEmpty)
+        XCTAssertEqual(local.requests.first?.processingMode, .onDeviceOnly)
+    }
+
     func testSubmittingTextRendersMessageWithoutOpeningLargeDisplay() {
         let context = makeContext()
 
@@ -108,6 +188,7 @@ final class ConversationPresenterTests: XCTestCase {
         let request = try XCTUnwrap(context.speechRecognitionService.requests.first)
         XCTAssertEqual(request.fileURL, audioURL)
         XCTAssertEqual(request.language, "ru-RU")
+        XCTAssertEqual(request.processingMode, .allowSystemNetworkFallback)
         XCTAssertNotNil(UUID(uuidString: request.conversationId))
         XCTAssertTrue(
             context.view.renderedModels.contains { $0.voiceInputState == .recognizing }
@@ -164,6 +245,48 @@ final class ConversationPresenterTests: XCTestCase {
         XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
     }
 
+    func testLocalOnlyModeUsesOnDeviceRecognitionInsteadOfBlockingRecording() async throws {
+        var settings = AppSettings.defaultValue
+        settings.privacyMode = .localOnly
+        settings.autoStartMicrophone = false
+        settings.transcriptFontScale = 1.25
+
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("presenter-local-recording.wav")
+        let context = makeContext(settings: settings)
+        context.audioRecordingService.recordingURL = audioURL
+        context.speechRecognitionService.result = .success(
+            SpeechToTextModel(
+                text: "Локальное распознавание",
+                language: "ru-RU",
+                durationMs: 900,
+                confidence: 0.9
+            )
+        )
+
+        await loadSettings(in: context)
+
+        let recordingStarted = expectation(description: "Local recording started")
+        context.view.onRender = { viewModel in
+            if viewModel.voiceInputState == .recording {
+                recordingStarted.fulfill()
+            }
+        }
+        XCTAssertTrue(context.presenter.didRequestStartVoiceRecording())
+        await fulfillment(of: [recordingStarted], timeout: 1)
+        context.view.onRender = nil
+
+        let speechRendered = expectation(description: "Local speech rendered")
+        context.view.onRecognizedSpeech = { speechRendered.fulfill() }
+        context.presenter.didRequestStopVoiceRecording()
+        await fulfillment(of: [speechRendered], timeout: 1)
+
+        let request = try XCTUnwrap(context.speechRecognitionService.requests.first)
+        XCTAssertEqual(request.processingMode, .onDeviceOnly)
+        XCTAssertEqual(context.view.recognizedTexts, ["Локальное распознавание"])
+        XCTAssertTrue(context.view.errors.isEmpty)
+    }
+
     func testNetworkRecognitionErrorExplainsOfflineFallback() async {
         var settings = AppSettings.defaultValue
         settings.privacyMode = .standard
@@ -194,7 +317,7 @@ final class ConversationPresenterTests: XCTestCase {
 
         XCTAssertEqual(
             context.view.errors.last,
-            "Нет подключения к интернету. Печатный ввод и готовые фразы продолжают работать."
+            "Для выбранного языка сейчас нужен интернет. Печатный ввод и готовые фразы продолжают работать."
         )
         XCTAssertEqual(context.view.renderedModels.last?.voiceInputState, .idle)
     }

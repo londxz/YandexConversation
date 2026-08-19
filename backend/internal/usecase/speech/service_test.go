@@ -80,6 +80,9 @@ func TestServiceTranscribesValidatedWAV(t *testing.T) {
 	if len(provider.input.PCM16LittleEndian) != len(pcm) {
 		t.Fatalf("provider PCM bytes = %d, want %d", len(provider.input.PCM16LittleEndian), len(pcm))
 	}
+	if len(provider.input.WAV) != len(pcm)+44 {
+		t.Fatalf("provider WAV bytes = %d, want %d", len(provider.input.WAV), len(pcm)+44)
+	}
 	if provider.input.SampleRateHertz != 16000 || provider.input.Channels != 1 {
 		t.Fatalf("provider format = %#v", provider.input)
 	}

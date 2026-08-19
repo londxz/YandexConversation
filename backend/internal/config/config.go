@@ -51,13 +51,12 @@ type DeviceSessionConfig struct {
 
 type SpeechConfig struct {
 	Provider           string
+	WhisperEndpoint    string
 	RecognitionTimeout time.Duration
 	MaxAudioBytes      int64
 	MaxDuration        time.Duration
 	SupportedLanguages []string
 	MaxConcurrent      int
-	YandexEndpoint     string
-	YandexAPIKey       string
 }
 
 type SecretsConfig struct {
@@ -93,14 +92,13 @@ func Load() (Config, error) {
 			IdempotencyTTL:  24 * time.Hour,
 		},
 		Speech: SpeechConfig{
-			Provider:           valueOrDefault("SPEECH_PROVIDER", "disabled"),
+			Provider:           strings.ToLower(valueOrDefault("SPEECH_PROVIDER", "disabled")),
+			WhisperEndpoint:    valueOrDefault("WHISPER_ENDPOINT", "http://127.0.0.1:8081/inference"),
 			RecognitionTimeout: 20 * time.Second,
 			MaxAudioBytes:      1 << 20,
 			MaxDuration:        30 * time.Second,
 			SupportedLanguages: commaSeparated(valueOrDefault("SPEECH_SUPPORTED_LANGUAGES", "ru-RU,en-US")),
 			MaxConcurrent:      16,
-			YandexEndpoint:     valueOrDefault("YANDEX_SPEECHKIT_ENDPOINT", "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize"),
-			YandexAPIKey:       strings.TrimSpace(os.Getenv("YANDEX_SPEECHKIT_API_KEY")),
 		},
 	}
 
@@ -209,25 +207,19 @@ func (config Config) validate() error {
 	if config.DeviceSessions.RefreshTokenTTL <= config.DeviceSessions.AccessTokenTTL {
 		return errors.New("REFRESH_TOKEN_TTL must exceed ACCESS_TOKEN_TTL")
 	}
-	if config.Speech.Provider != "disabled" && config.Speech.Provider != "yandex" {
-		return errors.New("SPEECH_PROVIDER must be disabled or yandex")
-	}
-	if config.Environment == "production" && config.Speech.Provider == "disabled" {
-		return errors.New("SPEECH_PROVIDER cannot be disabled in production")
+	switch config.Speech.Provider {
+	case "disabled":
+	case "whisper":
+		endpoint, err := url.ParseRequestURI(config.Speech.WhisperEndpoint)
+		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+			return errors.New("WHISPER_ENDPOINT must be an absolute HTTP or HTTPS URL")
+		}
+	default:
+		return errors.New("SPEECH_PROVIDER must be disabled or whisper")
 	}
 	if len(config.Speech.SupportedLanguages) == 0 {
 		return errors.New("SPEECH_SUPPORTED_LANGUAGES must contain at least one language")
 	}
-	if config.Speech.Provider == "yandex" {
-		if !isSafeHeaderSecret(config.Speech.YandexAPIKey) {
-			return errors.New("YANDEX_SPEECHKIT_API_KEY must contain 1-1024 visible ASCII characters")
-		}
-		endpoint, err := url.Parse(config.Speech.YandexEndpoint)
-		if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil {
-			return errors.New("YANDEX_SPEECHKIT_ENDPOINT must be an HTTPS URL without credentials")
-		}
-	}
-
 	return nil
 }
 

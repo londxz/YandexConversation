@@ -78,6 +78,7 @@ func (service *Service) Transcribe(
 	result, err := service.provider.Transcribe(
 		recognitionContext,
 		speechprovider.RecognitionRequest{
+			WAV:               input.WAV,
 			PCM16LittleEndian: audio.pcm,
 			Language:          language,
 			SampleRateHertz:   requiredSampleRate,

@@ -24,11 +24,17 @@ protocol MicrophonePermissionService: AnyObject {
     func requestPermission(completion: @escaping (Bool) -> Void)
 }
 
+enum SpeechRecognitionProcessingMode: Equatable {
+    case onDeviceOnly
+    case allowSystemNetworkFallback
+}
+
 protocol SpeechRecognitionService: AnyObject {
     func transcribeAudio(
         fileURL: URL,
         language: String,
         conversationId: String,
+        processingMode: SpeechRecognitionProcessingMode,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
     )
     func cancelTranscription()

@@ -51,8 +51,9 @@ final class AppContainer {
         httpClient: httpClient,
         deviceSessionRepository: deviceSessionRepository
     )
-    private(set) lazy var speechRecognitionService: SpeechRecognitionService = RemoteSpeechRecognitionService(
-        apiClient: apiClient
+    private(set) lazy var speechRecognitionService: SpeechRecognitionService = BackendFirstSpeechRecognitionService(
+        remoteService: RemoteSpeechRecognitionService(apiClient: apiClient),
+        localService: AppleSpeechRecognitionService()
     )
     private(set) lazy var coreDataStack = CoreDataStack()
     private(set) lazy var conversationRepository: ConversationRepository = CoreDataConversationRepository(

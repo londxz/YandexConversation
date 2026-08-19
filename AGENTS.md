@@ -18,6 +18,7 @@ The design priority is trust, clarity, speed, and accessibility. Avoid decorativ
 ## Production Principles
 
 - Offline-first: the iOS app must remain useful without the backend.
+- No mandatory paid services: core product flows must not require metered third-party APIs or user-supplied cloud keys.
 - Privacy-first: do not store raw audio by default. Do not log raw speech text or audio in production.
 - Accessibility-first: Dynamic Type, large tap targets, contrast, VoiceOver labels, reduced motion, and predictable navigation are required.
 - No demo-only shortcuts: no hardcoded `127.0.0.1`, no console-only success paths, no fake screens pretending to be implemented.
@@ -219,9 +220,13 @@ The app should support:
 
 - typed response without network;
 - TTS through `AVSpeechSynthesizer`;
-- batch upload for recorded audio;
-- realtime streaming over WebSocket when backend recognition is enabled;
+- backend-first push-to-talk recognition through the versioned Go API and self-hosted Whisper;
+- automatic Apple Speech fallback when the backend is unavailable;
+- a strict on-device mode that never sends audio over the network;
+- optional realtime streaming over WebSocket only when a self-hosted backend recognizer is enabled;
 - clear permission flow for microphone and speech features.
+
+Core iOS speech recognition must never depend on a paid provider API key. The standard flow uses the Go backend with a self-hosted open-source recognizer; Apple Speech keeps push-to-talk useful when that backend is unreachable. Strict on-device mode must bypass the backend completely.
 
 ## Screens and Capabilities
 
@@ -351,7 +356,6 @@ backend
 ├── internal/repository/redis
 ├── internal/speech
 │   ├── provider.go
-│   ├── yandex
 │   └── whisper
 ├── internal/sync
 ├── internal/auth
@@ -368,7 +372,7 @@ backend
 - Database: PostgreSQL for server-side data.
 - Cache/session state: Redis only where needed for realtime/session coordination.
 - Object storage: optional encrypted audio storage only if the product explicitly supports saving audio.
-- Speech provider abstraction: Go service calls provider adapters. Do not bind the domain to one STT implementation.
+- Speech provider abstraction: Go service calls self-hosted open-source adapters. Do not bind the domain to one STT implementation and do not make paid cloud STT a production requirement.
 - Observability: structured logs, metrics, tracing, request IDs.
 
 ### TCP Decision
@@ -771,10 +775,10 @@ Use sync only when enabled by the user. Local data remains the app's first sourc
 
 ### Phase 4: Speech Integration
 
-- Implement batch `/v1/speech/transcribe`.
-- Implement WebSocket `/v1/speech/stream`.
-- Add speech provider interface.
-- Add reconnect and partial/final handling on iOS.
+- Route standard push-to-talk recognition through `/v1/speech/transcribe`.
+- Run the batch endpoint against self-hosted Whisper and keep Apple Speech as the automatic fallback.
+- Implement WebSocket `/v1/speech/stream` with a self-hosted open-source recognizer.
+- Add reconnect and partial/final handling on iOS for realtime listen mode.
 - Implement listen mode with speaker labels.
 
 ### Phase 5: Sync and Production Hardening
@@ -822,6 +826,7 @@ The iOS production foundation is in place:
 - talk mode supports local typed messages, quick phrases, TTS, large text display, and explicit history restore;
 - history, phrases, folders, search, and settings are MVP modules;
 - network configuration is environment-based and the existing speech endpoint uses `/v1`;
+- push-to-talk speech recognition is backend-first through self-hosted Whisper, falls back to Apple Speech, and requires no paid provider key;
 - critical presenter and repository paths have an XCTest target and in-memory Core Data tests.
 
-The next product boundary is the backend and speech integration. Realtime recognition, speaker diarization, sync, device sessions, and server-side privacy/observability are intentionally not presented as completed. Keep local typing, TTS, phrases, settings, and history independent from backend availability.
+The next product boundary is self-hosted realtime listen-mode recognition and sync. Speaker diarization, sync, and the server realtime gateway are intentionally not presented as completed. Keep push-to-talk recognition, local typing, TTS, phrases, settings, and history useful when the backend is unavailable.

@@ -6,7 +6,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,7 +18,7 @@ import (
 	"github.com/londxz/HackatonYandex/backend/internal/repository/postgres"
 	"github.com/londxz/HackatonYandex/backend/internal/security"
 	speechprovider "github.com/londxz/HackatonYandex/backend/internal/speech"
-	yandexspeech "github.com/londxz/HackatonYandex/backend/internal/speech/yandex"
+	whisperspeech "github.com/londxz/HackatonYandex/backend/internal/speech/whisper"
 	httptransport "github.com/londxz/HackatonYandex/backend/internal/transport/http"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
 	deviceusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/devices"
@@ -70,22 +69,21 @@ func run() int {
 		},
 	)
 	var speechProvider speechprovider.Provider = speechprovider.UnavailableProvider{}
-	if appConfig.Speech.Provider == "yandex" {
-		endpoint, err := url.Parse(appConfig.Speech.YandexEndpoint)
+	if appConfig.Speech.Provider == "whisper" {
+		speechHTTPClient := &http.Client{
+			Timeout: appConfig.Speech.RecognitionTimeout + time.Second,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		speechProvider, err = whisperspeech.NewClient(
+			appConfig.Speech.WhisperEndpoint,
+			speechHTTPClient,
+		)
 		if err != nil {
-			logger.Error("speech provider endpoint is invalid", "error", err)
+			logger.Error("speech provider initialization failed", "error", err)
 			return 1
 		}
-		speechProvider = yandexspeech.NewClient(
-			endpoint,
-			appConfig.Speech.YandexAPIKey,
-			&http.Client{
-				Timeout: appConfig.Speech.RecognitionTimeout + 5*time.Second,
-				CheckRedirect: func(*http.Request, []*http.Request) error {
-					return http.ErrUseLastResponse
-				},
-			},
-		)
 	}
 	speechService := speechusecase.NewService(
 		speechProvider,

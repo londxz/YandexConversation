@@ -19,6 +19,7 @@ final class RemoteSpeechRecognitionService: SpeechRecognitionService {
         fileURL: URL,
         language: String,
         conversationId: String,
+        processingMode: SpeechRecognitionProcessingMode,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
     ) {
         transcriptionTask?.cancel()

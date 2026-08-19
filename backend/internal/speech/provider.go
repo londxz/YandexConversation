@@ -14,6 +14,7 @@ var (
 )
 
 type RecognitionRequest struct {
+	WAV               []byte
 	PCM16LittleEndian []byte
 	Language          string
 	SampleRateHertz   int

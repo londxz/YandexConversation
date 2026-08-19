@@ -28,6 +28,8 @@
 
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Доступ к микрофону нужен, чтобы показывать речь собеседника текстом.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Распознавание речи нужно, чтобы преобразовывать слова собеседника в текст. В режиме «Только на устройстве» аудио не покидает iPhone.</string>
 
 	<key>UIAppFonts</key>
 	<array>

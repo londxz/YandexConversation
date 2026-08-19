@@ -67,7 +67,7 @@ struct AppConfig {
     private static func defaultBaseURL(for environment: AppEnvironment) -> URL {
         switch environment {
         case .development:
-            return URL(string: "https://api.razgovor.app")!
+            return URL(string: "http://127.0.0.1:8080")!
         case .staging:
             return URL(string: "https://staging-api.razgovor.app")!
         case .production:

@@ -16,6 +16,7 @@ enum AppError: Error, Equatable {
     case serverError(statusCode: Int)
     case apiError(code: String, message: String, requestID: String?)
     case speechUnavailable
+    case onDeviceRecognitionUnavailable
     case permissionDenied
     case unknown
 }

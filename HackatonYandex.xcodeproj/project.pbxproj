@@ -61,6 +61,8 @@
 		4D100001000000000000000C /* SpeechServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000000C /* SpeechServices.swift */; };
 		4D100001000000000000000D /* DefaultAudioRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000000D /* DefaultAudioRecorderService.swift */; };
 		4D100001000000000000000E /* RemoteSpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000000E /* RemoteSpeechRecognitionService.swift */; };
+		7D1000010000000000000001 /* AppleSpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D2000010000000000000001 /* AppleSpeechRecognitionService.swift */; };
+		7D1000010000000000000002 /* BackendFirstSpeechRecognitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D2000010000000000000002 /* BackendFirstSpeechRecognitionService.swift */; };
 		4D100001000000000000000F /* DefaultTextToSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000000F /* DefaultTextToSpeechService.swift */; };
 		4D1000010000000000000010 /* DefaultMicrophonePermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000010 /* DefaultMicrophonePermissionService.swift */; };
 		4D1000010000000000000011 /* CoreDataStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000011 /* CoreDataStack.swift */; };
@@ -137,6 +139,8 @@
 		4D200001000000000000000C /* SpeechServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechServices.swift; sourceTree = "<group>"; };
 		4D200001000000000000000D /* DefaultAudioRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultAudioRecorderService.swift; sourceTree = "<group>"; };
 		4D200001000000000000000E /* RemoteSpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSpeechRecognitionService.swift; sourceTree = "<group>"; };
+		7D2000010000000000000001 /* AppleSpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechRecognitionService.swift; sourceTree = "<group>"; };
+		7D2000010000000000000002 /* BackendFirstSpeechRecognitionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendFirstSpeechRecognitionService.swift; sourceTree = "<group>"; };
 		4D200001000000000000000F /* DefaultTextToSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultTextToSpeechService.swift; sourceTree = "<group>"; };
 		4D2000010000000000000010 /* DefaultMicrophonePermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultMicrophonePermissionService.swift; sourceTree = "<group>"; };
 		4D2000010000000000000011 /* CoreDataStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStack.swift; sourceTree = "<group>"; };
@@ -308,6 +312,8 @@
 		4D300001000000000000000F /* Speech */ = {
 			isa = PBXGroup;
 			children = (
+				7D2000010000000000000001 /* AppleSpeechRecognitionService.swift */,
+				7D2000010000000000000002 /* BackendFirstSpeechRecognitionService.swift */,
 				4D200001000000000000000E /* RemoteSpeechRecognitionService.swift */,
 			);
 			path = Speech;
@@ -713,6 +719,8 @@
 				4D1000010000000000000029 /* PhrasesView.swift in Sources */,
 				4D100001000000000000002A /* PhrasesPresenter.swift in Sources */,
 				4D100001000000000000000E /* RemoteSpeechRecognitionService.swift in Sources */,
+				7D1000010000000000000001 /* AppleSpeechRecognitionService.swift in Sources */,
+				7D1000010000000000000002 /* BackendFirstSpeechRecognitionService.swift in Sources */,
 				4D1000010000000000000012 /* CoreDataConversationRepository.swift in Sources */,
 				4D1000010000000000000015 /* CoreDataPhraseRepository.swift in Sources */,
 				4D1000010000000000000020 /* CoreDataSettingsRepository.swift in Sources */,
