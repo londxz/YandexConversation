@@ -169,6 +169,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/speech/stream:
+    get:
+      operationId: streamSpeech
+      description: |
+        Upgrades to an authenticated WebSocket. JSON client messages are
+        `start`, ordered `audio_chunk`, and `stop`; server events are `ready`,
+        `partial`, `final`, `error`, and `stopped`. Audio is PCM16, 16 kHz,
+        mono and `audio_chunk.data` is base64 encoded.
+      security:
+        - bearerAuth: []
+      x-websocket-client-messages:
+        - start
+        - audio_chunk
+        - stop
+      x-websocket-server-events:
+        - ready
+        - partial
+        - final
+        - error
+        - stopped
+      responses:
+        "101":
+          description: WebSocket protocol upgrade accepted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     bearerAuth:

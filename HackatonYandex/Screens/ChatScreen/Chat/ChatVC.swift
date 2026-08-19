@@ -42,6 +42,12 @@ class ChatVC: UIViewController {
     private var currentChildVC: UIViewController?
     lazy var talkVC = TalkViewController()
     lazy var listenVC = ListenViewController()
+    lazy var listenPresenter = ListenPresenter(
+        view: listenVC,
+        microphonePermissionService: container.microphonePermissionService,
+        audioCaptureService: container.realtimeAudioCaptureService,
+        speechClient: container.realtimeSpeechClient
+    )
     
     var largeTextDisplayViewController: LargeTextDisplayViewController?
     var currentConversationMode: ConversationMode = .talk
@@ -74,6 +80,8 @@ class ChatVC: UIViewController {
         
         segmentControlComponent.delegate = self
         talkVC.delegate = self
+        listenVC.presenter = listenPresenter
+        listenPresenter.delegate = self
         chatComponent.delegate = self
         presenter.viewDidLoad()
     }
@@ -89,6 +97,7 @@ class ChatVC: UIViewController {
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        listenPresenter.deactivate()
         presenter.viewDidDisappear()
     }
     

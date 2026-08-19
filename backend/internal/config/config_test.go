@@ -40,6 +40,11 @@ func TestLoadUsesProductionDefaults(t *testing.T) {
 	if config.Speech.MaxAudioBytes != 1<<20 || config.Speech.MaxDuration != 30*time.Second {
 		t.Fatalf("Speech limits = %d bytes, %s", config.Speech.MaxAudioBytes, config.Speech.MaxDuration)
 	}
+	if config.Speech.StreamPartialInterval != 2*time.Second ||
+		config.Speech.StreamSilenceDuration != 800*time.Millisecond ||
+		config.Speech.StreamMaxSegmentDuration != 15*time.Second {
+		t.Fatalf("unexpected speech stream timing: %#v", config.Speech)
+	}
 }
 
 func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
@@ -150,6 +155,17 @@ func TestLoadRejectsInvalidWhisperEndpoint(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsStreamSegmentLongerThanBatchLimit(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("SPEECH_STREAM_MAX_SEGMENT_DURATION", "31s")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want stream duration validation error")
+	}
+}
+
 func setTestSecrets(t *testing.T) {
 	t.Helper()
 	t.Setenv("TOKEN_PEPPER_BASE64", "bG9jYWwtdG9rZW4tcGVwcGVyLTMyLWJ5dGUtdmFsdWU=")
@@ -157,4 +173,9 @@ func setTestSecrets(t *testing.T) {
 	t.Setenv("SPEECH_PROVIDER", "")
 	t.Setenv("WHISPER_ENDPOINT", "")
 	t.Setenv("SPEECH_SUPPORTED_LANGUAGES", "")
+	t.Setenv("SPEECH_STREAM_PARTIAL_INTERVAL", "")
+	t.Setenv("SPEECH_STREAM_SILENCE_DURATION", "")
+	t.Setenv("SPEECH_STREAM_MAX_SEGMENT_DURATION", "")
+	t.Setenv("SPEECH_STREAM_MAX_CHUNK_BYTES", "")
+	t.Setenv("SPEECH_STREAM_MAX_CONNECTIONS", "")
 }

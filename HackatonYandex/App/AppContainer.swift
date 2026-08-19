@@ -37,6 +37,7 @@ final class AppContainer {
     let appStateStore: AppStateStoring
     private(set) lazy var microphonePermissionService: MicrophonePermissionService = DefaultMicrophonePermissionService()
     private(set) lazy var audioRecordingService: AudioRecordingService = DefaultAudioRecorderService()
+    private(set) lazy var realtimeAudioCaptureService: RealtimeAudioCaptureService = DefaultRealtimeAudioCaptureService()
     private(set) lazy var textToSpeechService: TextToSpeechService = DefaultTextToSpeechService()
     private(set) lazy var httpClient = HTTPClient(config: config)
     private(set) lazy var deviceSessionStore: DeviceSessionStateStoring = KeychainDeviceSessionStore()
@@ -54,6 +55,13 @@ final class AppContainer {
     private(set) lazy var speechRecognitionService: SpeechRecognitionService = BackendFirstSpeechRecognitionService(
         remoteService: RemoteSpeechRecognitionService(apiClient: apiClient),
         localService: AppleSpeechRecognitionService()
+    )
+    private(set) lazy var realtimeSpeechClient: RealtimeSpeechClient = BackendFirstRealtimeSpeechClient(
+        remoteClient: RemoteRealtimeSpeechClient(
+            config: config,
+            deviceSessionRepository: deviceSessionRepository
+        ),
+        localClient: AppleRealtimeSpeechClient()
     )
     private(set) lazy var coreDataStack = CoreDataStack()
     private(set) lazy var conversationRepository: ConversationRepository = CoreDataConversationRepository(

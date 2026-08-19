@@ -40,6 +40,47 @@ protocol SpeechRecognitionService: AnyObject {
     func cancelTranscription()
 }
 
+struct RealtimeSpeechConfiguration: Equatable {
+    let conversationId: String
+    let language: String
+    let processingMode: SpeechRecognitionProcessingMode
+}
+
+struct RealtimeSpeechSegment: Equatable {
+    let id: String?
+    let sequence: Int
+    let text: String
+    let speakerId: String
+    let speakerLabel: String
+    let confidence: Double?
+}
+
+enum RealtimeSpeechEvent {
+    case connecting
+    case connected
+    case reconnecting(attempt: Int)
+    case partial(RealtimeSpeechSegment)
+    case final(RealtimeSpeechSegment)
+    case stopped
+    case failure(Error)
+}
+
+protocol RealtimeAudioCaptureService: AnyObject {
+    var isCapturing: Bool { get }
+
+    func startCapture(onAudioChunk: @escaping (Data) -> Void) throws
+    func stopCapture()
+}
+
+protocol RealtimeSpeechClient: AnyObject {
+    var eventHandler: ((RealtimeSpeechEvent) -> Void)? { get set }
+
+    func start(configuration: RealtimeSpeechConfiguration)
+    func appendAudioChunk(_ data: Data)
+    func stop()
+    func cancel()
+}
+
 struct TextToSpeechVoice: Equatable {
     let identifier: String
     let name: String

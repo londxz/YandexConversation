@@ -223,7 +223,7 @@ The app should support:
 - backend-first push-to-talk recognition through the versioned Go API and self-hosted Whisper;
 - automatic Apple Speech fallback when the backend is unavailable;
 - a strict on-device mode that never sends audio over the network;
-- optional realtime streaming over WebSocket only when a self-hosted backend recognizer is enabled;
+- realtime streaming over WebSocket through the self-hosted backend recognizer;
 - clear permission flow for microphone and speech features.
 
 Core iOS speech recognition must never depend on a paid provider API key. The standard flow uses the Go backend with a self-hosted open-source recognizer; Apple Speech keeps push-to-talk useful when that backend is unreachable. Strict on-device mode must bypass the backend completely.
@@ -777,7 +777,7 @@ Use sync only when enabled by the user. Local data remains the app's first sourc
 
 - Route standard push-to-talk recognition through `/v1/speech/transcribe`.
 - Run the batch endpoint against self-hosted Whisper and keep Apple Speech as the automatic fallback.
-- Implement WebSocket `/v1/speech/stream` with a self-hosted open-source recognizer.
+- Maintain WebSocket `/v1/speech/stream` with a self-hosted open-source recognizer.
 - Add reconnect and partial/final handling on iOS for realtime listen mode.
 - Implement listen mode with speaker labels.
 
@@ -827,6 +827,8 @@ The iOS production foundation is in place:
 - history, phrases, folders, search, and settings are MVP modules;
 - network configuration is environment-based and the existing speech endpoint uses `/v1`;
 - push-to-talk speech recognition is backend-first through self-hosted Whisper, falls back to Apple Speech, and requires no paid provider key;
+- Listen mode streams PCM16 audio through the authenticated Go WebSocket, renders partial/final text, reconnects with bounded backoff, falls back to Apple Speech, and saves only final segments;
+- Listen mode is an MVP module with explicit connecting, listening, reconnecting, pausing, paused, and error states;
 - critical presenter and repository paths have an XCTest target and in-memory Core Data tests.
 
-The next product boundary is self-hosted realtime listen-mode recognition and sync. Speaker diarization, sync, and the server realtime gateway are intentionally not presented as completed. Keep push-to-talk recognition, local typing, TTS, phrases, settings, and history useful when the backend is unavailable.
+The next product boundary is real speaker diarization and offline-first sync. The current realtime stream deliberately uses the stable label `Говорящий 1`; it does not pretend to distinguish speakers yet. Sync is also intentionally not presented as completed. Keep speech fallback, local typing, TTS, phrases, settings, and history useful when the backend is unavailable.

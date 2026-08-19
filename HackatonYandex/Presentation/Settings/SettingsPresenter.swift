@@ -255,9 +255,8 @@ final class SettingsPresenter {
                     toggleRow(
                         id: .autoStartMicrophone,
                         title: "Автостарт микрофона",
-                        subtitle: "Недоступно",
-                        isOn: settings.autoStartMicrophone,
-                        isEnabled: false
+                        subtitle: "Начинать прослушивание при открытии режима",
+                        isOn: settings.autoStartMicrophone
                     ),
                     toggleRow(
                         id: .saveConversations,

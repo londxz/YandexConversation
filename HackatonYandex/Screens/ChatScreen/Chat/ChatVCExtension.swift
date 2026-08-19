@@ -40,9 +40,6 @@ extension ChatVC: ConversationView {
         segmentControlComponent.setSelectedIndex(viewModel.mode.segmentIndex)
         talkVC.applyTranscriptFontScale(viewModel.transcriptFontScale)
         listenVC.applyTranscriptFontScale(viewModel.transcriptFontScale)
-        topChatComponent.applyMicrophoneActivity(
-            isActive: viewModel.isMicrophoneAvailable
-        )
         chatComponent.applyVoiceInputState(viewModel.voiceInputState)
 
         if !viewModel.isInputVisible {
@@ -51,9 +48,19 @@ extension ChatVC: ConversationView {
 
         switch viewModel.mode {
         case .talk:
+            listenPresenter.deactivate()
+            topChatComponent.applyMicrophoneActivity(
+                isActive: viewModel.isMicrophoneAvailable
+            )
             switchToChild(talkVC)
         case .listen:
             switchToChild(listenVC)
+            if let configuration = viewModel.listenConfiguration {
+                listenPresenter.activate(
+                    configuration: configuration,
+                    autoStart: viewModel.autoStartListening
+                )
+            }
         }
 
         UIView.animate(withDuration: 0.2) {
@@ -137,6 +144,27 @@ extension ChatVC: ConversationView {
                 )
             }
         }
+    }
+}
+
+extension ChatVC: ListenPresenterDelegate {
+    func listenPresenter(
+        _ presenter: ListenPresenter,
+        didFinalize segment: RealtimeSpeechSegment,
+        conversationId: String
+    ) {
+        self.presenter.didReceiveRealtimeSpeech(
+            segment,
+            conversationId: conversationId
+        )
+    }
+
+    func listenPresenter(
+        _ presenter: ListenPresenter,
+        didChangeMicrophoneActivity isActive: Bool
+    ) {
+        guard currentConversationMode == .listen else { return }
+        topChatComponent.applyMicrophoneActivity(isActive: isActive)
     }
 }
 

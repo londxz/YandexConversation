@@ -21,6 +21,7 @@ import (
 	whisperspeech "github.com/londxz/HackatonYandex/backend/internal/speech/whisper"
 	httptransport "github.com/londxz/HackatonYandex/backend/internal/transport/http"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
+	wstransport "github.com/londxz/HackatonYandex/backend/internal/transport/ws"
 	deviceusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/devices"
 	speechusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/speech"
 )
@@ -108,11 +109,23 @@ func run() int {
 		logger,
 		appConfig.Speech.MaxAudioBytes,
 	)
+	speechStreamHandler := wstransport.NewSpeechStreamHandler(
+		speechService,
+		logger,
+		wstransport.SpeechStreamPolicy{
+			PartialInterval:    appConfig.Speech.StreamPartialInterval,
+			SilenceDuration:    appConfig.Speech.StreamSilenceDuration,
+			MaxSegmentDuration: appConfig.Speech.StreamMaxSegmentDuration,
+			MaxChunkBytes:      appConfig.Speech.StreamMaxChunkBytes,
+			MaxConnections:     appConfig.Speech.StreamMaxConnections,
+		},
+	)
 	router := httptransport.NewRouter(httptransport.RouterDependencies{
 		Logger:              logger,
 		HealthHandler:       healthHandler,
 		DeviceHandler:       deviceHandler,
 		SpeechHandler:       speechHandler,
+		SpeechStreamHandler: speechStreamHandler,
 		DeviceAuthenticator: deviceService,
 		MaxBodyBytes:        appConfig.HTTP.MaxBodyBytes,
 	})
@@ -151,6 +164,7 @@ func run() int {
 
 	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), appConfig.ShutdownTimeout)
 	defer cancelShutdown()
+	speechStreamHandler.Shutdown(shutdownContext)
 	if err := server.Shutdown(shutdownContext); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		return 1

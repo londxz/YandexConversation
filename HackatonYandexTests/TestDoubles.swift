@@ -129,6 +129,67 @@ final class SpeechRecognitionServiceStub: SpeechRecognitionService {
     }
 }
 
+final class RealtimeAudioCaptureServiceStub: RealtimeAudioCaptureService {
+    var startError: Error?
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+    private(set) var isCapturing = false
+    private var chunkHandler: ((Data) -> Void)?
+
+    func startCapture(onAudioChunk: @escaping (Data) -> Void) throws {
+        startCallCount += 1
+        if let startError {
+            throw startError
+        }
+        isCapturing = true
+        chunkHandler = onAudioChunk
+    }
+
+    func stopCapture() {
+        stopCallCount += 1
+        isCapturing = false
+        chunkHandler = nil
+    }
+
+    func emitAudio(_ data: Data) {
+        chunkHandler?(data)
+    }
+}
+
+final class RealtimeSpeechClientSpy: RealtimeSpeechClient {
+    var eventHandler: ((RealtimeSpeechEvent) -> Void)?
+    var onStart: (() -> Void)?
+    var onAudioChunk: (() -> Void)?
+    var onStop: (() -> Void)?
+    private(set) var configurations: [RealtimeSpeechConfiguration] = []
+    private(set) var audioChunks: [Data] = []
+    private(set) var stopCallCount = 0
+    private(set) var cancelCallCount = 0
+
+    func start(configuration: RealtimeSpeechConfiguration) {
+        configurations.append(configuration)
+        onStart?()
+    }
+
+    func appendAudioChunk(_ data: Data) {
+        audioChunks.append(data)
+        onAudioChunk?()
+    }
+
+    func stop() {
+        stopCallCount += 1
+        onStop?()
+    }
+
+    func cancel() {
+        cancelCallCount += 1
+    }
+
+    func emit(_ event: RealtimeSpeechEvent) {
+        eventHandler?(event)
+    }
+}
+
 final class TextToSpeechServiceSpy: TextToSpeechService {
     private(set) var spokenTexts: [String] = []
     private(set) var stopCallCount = 0
@@ -203,6 +264,63 @@ final class ConversationViewSpy: ConversationView {
     func displayConversationMessages(_ messages: [ConversationMessage]) {
         displayedMessages = messages
         onDisplayMessages?()
+    }
+}
+
+@MainActor
+final class ListenViewSpy: ListenView {
+    private(set) var models: [ListenViewModel] = []
+    private(set) var partialSegments: [RealtimeSpeechSegment] = []
+    private(set) var finalSegments: [RealtimeSpeechSegment] = []
+    private(set) var clearPartialCallCount = 0
+    var onRender: ((ListenViewModel) -> Void)?
+
+    func render(_ viewModel: ListenViewModel) {
+        models.append(viewModel)
+        onRender?(viewModel)
+    }
+
+    func displayPartialSpeech(_ segment: RealtimeSpeechSegment) {
+        partialSegments.append(segment)
+    }
+
+    func displayFinalSpeech(_ segment: RealtimeSpeechSegment) {
+        finalSegments.append(segment)
+    }
+
+    func clearPartialSpeech() {
+        clearPartialCallCount += 1
+    }
+}
+
+@MainActor
+final class ListenPresenterDelegateSpy: ListenPresenterDelegate {
+    struct FinalizedSegment: Equatable {
+        let segment: RealtimeSpeechSegment
+        let conversationId: String
+    }
+
+    private(set) var finalizedSegments: [FinalizedSegment] = []
+    private(set) var microphoneActivity: [Bool] = []
+
+    func listenPresenter(
+        _ presenter: ListenPresenter,
+        didFinalize segment: RealtimeSpeechSegment,
+        conversationId: String
+    ) {
+        finalizedSegments.append(
+            FinalizedSegment(
+                segment: segment,
+                conversationId: conversationId
+            )
+        )
+    }
+
+    func listenPresenter(
+        _ presenter: ListenPresenter,
+        didChangeMicrophoneActivity isActive: Bool
+    ) {
+        microphoneActivity.append(isActive)
     }
 }
 

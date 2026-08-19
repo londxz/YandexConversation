@@ -50,13 +50,18 @@ type DeviceSessionConfig struct {
 }
 
 type SpeechConfig struct {
-	Provider           string
-	WhisperEndpoint    string
-	RecognitionTimeout time.Duration
-	MaxAudioBytes      int64
-	MaxDuration        time.Duration
-	SupportedLanguages []string
-	MaxConcurrent      int
+	Provider                 string
+	WhisperEndpoint          string
+	RecognitionTimeout       time.Duration
+	MaxAudioBytes            int64
+	MaxDuration              time.Duration
+	SupportedLanguages       []string
+	MaxConcurrent            int
+	StreamPartialInterval    time.Duration
+	StreamSilenceDuration    time.Duration
+	StreamMaxSegmentDuration time.Duration
+	StreamMaxChunkBytes      int64
+	StreamMaxConnections     int
 }
 
 type SecretsConfig struct {
@@ -92,13 +97,18 @@ func Load() (Config, error) {
 			IdempotencyTTL:  24 * time.Hour,
 		},
 		Speech: SpeechConfig{
-			Provider:           strings.ToLower(valueOrDefault("SPEECH_PROVIDER", "disabled")),
-			WhisperEndpoint:    valueOrDefault("WHISPER_ENDPOINT", "http://127.0.0.1:8081/inference"),
-			RecognitionTimeout: 20 * time.Second,
-			MaxAudioBytes:      1 << 20,
-			MaxDuration:        30 * time.Second,
-			SupportedLanguages: commaSeparated(valueOrDefault("SPEECH_SUPPORTED_LANGUAGES", "ru-RU,en-US")),
-			MaxConcurrent:      16,
+			Provider:                 strings.ToLower(valueOrDefault("SPEECH_PROVIDER", "disabled")),
+			WhisperEndpoint:          valueOrDefault("WHISPER_ENDPOINT", "http://127.0.0.1:8081/inference"),
+			RecognitionTimeout:       20 * time.Second,
+			MaxAudioBytes:            1 << 20,
+			MaxDuration:              30 * time.Second,
+			SupportedLanguages:       commaSeparated(valueOrDefault("SPEECH_SUPPORTED_LANGUAGES", "ru-RU,en-US")),
+			MaxConcurrent:            16,
+			StreamPartialInterval:    2 * time.Second,
+			StreamSilenceDuration:    800 * time.Millisecond,
+			StreamMaxSegmentDuration: 15 * time.Second,
+			StreamMaxChunkBytes:      64 << 10,
+			StreamMaxConnections:     32,
 		},
 	}
 
@@ -160,6 +170,21 @@ func Load() (Config, error) {
 	if config.Speech.MaxConcurrent, err = positiveInt("SPEECH_MAX_CONCURRENT_REQUESTS", config.Speech.MaxConcurrent); err != nil {
 		return Config{}, err
 	}
+	if config.Speech.StreamPartialInterval, err = duration("SPEECH_STREAM_PARTIAL_INTERVAL", config.Speech.StreamPartialInterval); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.StreamSilenceDuration, err = duration("SPEECH_STREAM_SILENCE_DURATION", config.Speech.StreamSilenceDuration); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.StreamMaxSegmentDuration, err = duration("SPEECH_STREAM_MAX_SEGMENT_DURATION", config.Speech.StreamMaxSegmentDuration); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.StreamMaxChunkBytes, err = positiveInt64("SPEECH_STREAM_MAX_CHUNK_BYTES", config.Speech.StreamMaxChunkBytes); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.StreamMaxConnections, err = positiveInt("SPEECH_STREAM_MAX_CONNECTIONS", config.Speech.StreamMaxConnections); err != nil {
+		return Config{}, err
+	}
 	if config.Secrets.TokenPepper, err = secret("TOKEN_PEPPER_BASE64"); err != nil {
 		return Config{}, err
 	}
@@ -219,6 +244,15 @@ func (config Config) validate() error {
 	}
 	if len(config.Speech.SupportedLanguages) == 0 {
 		return errors.New("SPEECH_SUPPORTED_LANGUAGES must contain at least one language")
+	}
+	if config.Speech.StreamMaxSegmentDuration > config.Speech.MaxDuration {
+		return errors.New("SPEECH_STREAM_MAX_SEGMENT_DURATION cannot exceed SPEECH_MAX_DURATION")
+	}
+	if config.Speech.StreamPartialInterval >= config.Speech.StreamMaxSegmentDuration {
+		return errors.New("SPEECH_STREAM_PARTIAL_INTERVAL must be shorter than SPEECH_STREAM_MAX_SEGMENT_DURATION")
+	}
+	if config.Speech.StreamSilenceDuration >= config.Speech.StreamMaxSegmentDuration {
+		return errors.New("SPEECH_STREAM_SILENCE_DURATION must be shorter than SPEECH_STREAM_MAX_SEGMENT_DURATION")
 	}
 	return nil
 }

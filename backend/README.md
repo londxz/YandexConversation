@@ -57,11 +57,14 @@ Device session endpoints:
 - `POST /v1/devices/refresh` atomically rotates both opaque tokens.
 - `DELETE /v1/devices/{device_id}` permanently deletes the authenticated device and its server data.
 
-Speech endpoint:
+Speech endpoints:
 
 - `POST /v1/speech/transcribe` accepts authenticated `multipart/form-data`
   containing `file` (PCM16, 16 kHz, mono WAV), `language`, and an optional
   `conversation_id` UUID.
+- `WS /v1/speech/stream` accepts an authenticated `start` message followed by
+  ordered base64 PCM16 chunks and a `stop` message. It emits `ready`, `partial`,
+  `final`, `error`, and `stopped` events.
 
 The synchronous endpoint accepts at most 1 MiB of PCM data and 30 seconds of
 audio. Raw audio is kept only in request memory, is not persisted, and is never
@@ -70,6 +73,12 @@ written to logs.
 Each API instance also bounds concurrent recognition calls; excess requests
 receive `429 speech_busy` with `Retry-After: 1`.
 
+Realtime audio is segmented in memory on silence or the configured maximum
+segment duration. A rolling segment is sent to the same private `whisper.cpp`
+sidecar for partial and final recognition. Raw chunks and transcripts are not
+logged or persisted by the backend. The current v1 stream labels recognized
+segments as `Говорящий 1`; true speaker diarization is a separate next stage.
+
 The default flow is backend-first: iOS sends the completed push-to-talk WAV to
 the authenticated Go endpoint, which validates it and calls the private
 `whisper.cpp` sidecar. If the backend is unavailable, iOS automatically retries
@@ -77,6 +86,11 @@ the same recording through Apple Speech. Privacy mode bypasses the backend and
 requires on-device Apple recognition. No cloud speech key or metered STT API is
 required. `SPEECH_PROVIDER=disabled` remains available for deployments that
 want the endpoint to return `503 speech_unavailable` and rely on the iOS fallback.
+
+In Listen mode, iOS streams audio to the WebSocket endpoint, reconnects with
+bounded exponential backoff, and falls back to Apple Speech after the backend
+reconnect budget is exhausted. Strict on-device privacy mode never opens the
+WebSocket.
 
 Registration and refresh require a unique `Idempotency-Key` containing 16 to
 100 visible ASCII characters. Protected routes use

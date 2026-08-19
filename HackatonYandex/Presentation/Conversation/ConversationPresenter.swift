@@ -38,6 +38,8 @@ struct ConversationViewModel {
     let transcriptFontScale: Float
     let isMicrophoneAvailable: Bool
     let voiceInputState: ConversationVoiceInputState
+    let listenConfiguration: RealtimeSpeechConfiguration?
+    let autoStartListening: Bool
 }
 
 enum ConversationVoiceInputState: Equatable {
@@ -131,6 +133,7 @@ final class ConversationPresenter {
             return
         }
 
+        stopActiveVoiceInputIfNeeded()
         mode = nextMode
         currentConversation.mode = nextMode.domainMode
         currentConversation.updatedAt = Date()
@@ -254,6 +257,25 @@ final class ConversationPresenter {
         submitOutgoingMessage(text, source: .quickPhrase)
     }
 
+    func didReceiveRealtimeSpeech(
+        _ segment: RealtimeSpeechSegment,
+        conversationId: String
+    ) {
+        guard mode == .listen,
+              currentConversation.id == conversationId else {
+            return
+        }
+
+        hasConversationMessages = true
+        persistMessage(
+            text: segment.text,
+            source: .externalSpeech,
+            speakerId: segment.speakerId,
+            speakerLabel: segment.speakerLabel,
+            audioDurationMs: nil
+        )
+    }
+
     func didRequestNewConversation() {
         stopActiveVoiceInputIfNeeded()
         currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
@@ -322,7 +344,17 @@ final class ConversationPresenter {
                 isInputVisible: mode == .talk,
                 transcriptFontScale: settings.transcriptFontScale,
                 isMicrophoneAvailable: microphonePermissionService.authorizationStatus == .granted,
-                voiceInputState: voiceInputState
+                voiceInputState: voiceInputState,
+                listenConfiguration: mode == .listen
+                    ? RealtimeSpeechConfiguration(
+                        conversationId: currentConversation.id,
+                        language: settings.recognitionLanguage,
+                        processingMode: settings.privacyMode == .localOnly
+                            ? .onDeviceOnly
+                            : .allowSystemNetworkFallback
+                    )
+                    : nil,
+                autoStartListening: settings.autoStartMicrophone
             )
         )
     }
