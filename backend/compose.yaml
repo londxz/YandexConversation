@@ -47,6 +47,11 @@ services:
       LOG_LEVEL: debug
       HTTP_ADDRESS: :8080
       DATABASE_URL: postgres://razgovor:local-development-password@postgres:5432/razgovor?sslmode=disable
+      TOKEN_PEPPER_BASE64: bG9jYWwtdG9rZW4tcGVwcGVyLTMyLWJ5dGUtdmFsdWU=
+      IDEMPOTENCY_ENCRYPTION_KEY_BASE64: bG9jYWwtaWRlbXBvdGVuY3ktMzItYnl0ZS12YWx1ZXM=
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 2160h
+      IDEMPOTENCY_TTL: 24h
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/readyz"]
       interval: 5s

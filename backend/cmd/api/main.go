@@ -15,8 +15,10 @@ import (
 	"github.com/londxz/HackatonYandex/backend/internal/config"
 	"github.com/londxz/HackatonYandex/backend/internal/observability"
 	"github.com/londxz/HackatonYandex/backend/internal/repository/postgres"
+	"github.com/londxz/HackatonYandex/backend/internal/security"
 	httptransport "github.com/londxz/HackatonYandex/backend/internal/transport/http"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
+	deviceusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/devices"
 )
 
 func main() {
@@ -41,6 +43,27 @@ func run() int {
 		return 1
 	}
 	defer pool.Close()
+	credentials, err := security.NewCredentialManager(appConfig.Secrets.TokenPepper)
+	if err != nil {
+		logger.Error("credential manager initialization failed", "error", err)
+		return 1
+	}
+	idempotencySealer, err := security.NewSealer(appConfig.Secrets.IdempotencyEncryptionKey)
+	if err != nil {
+		logger.Error("idempotency encryption initialization failed", "error", err)
+		return 1
+	}
+	deviceRepository := postgres.NewDeviceRepository(pool)
+	deviceService := deviceusecase.NewService(
+		deviceRepository,
+		credentials,
+		idempotencySealer,
+		deviceusecase.SessionPolicy{
+			AccessTokenTTL:  appConfig.DeviceSessions.AccessTokenTTL,
+			RefreshTokenTTL: appConfig.DeviceSessions.RefreshTokenTTL,
+			IdempotencyTTL:  appConfig.DeviceSessions.IdempotencyTTL,
+		},
+	)
 
 	healthHandler := handlers.NewHealthHandler(
 		pool,
@@ -48,10 +71,13 @@ func run() int {
 		buildinfo.Version,
 		appConfig.Database.HealthTimeout,
 	)
+	deviceHandler := handlers.NewDeviceHandler(deviceService, logger)
 	router := httptransport.NewRouter(httptransport.RouterDependencies{
-		Logger:        logger,
-		HealthHandler: healthHandler,
-		MaxBodyBytes:  appConfig.HTTP.MaxBodyBytes,
+		Logger:              logger,
+		HealthHandler:       healthHandler,
+		DeviceHandler:       deviceHandler,
+		DeviceAuthenticator: deviceService,
+		MaxBodyBytes:        appConfig.HTTP.MaxBodyBytes,
 	})
 	server := app.NewServer(appConfig.HTTP, router, logger)
 

@@ -13,14 +13,42 @@ import (
 	"testing"
 	"time"
 
+	"github.com/londxz/HackatonYandex/backend/internal/domain"
 	httptransport "github.com/londxz/HackatonYandex/backend/internal/transport/http"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/respond"
+	deviceusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/devices"
 )
 
 type pingerStub struct {
 	err       error
 	callCount int
+}
+
+type routerDeviceServiceStub struct{}
+
+func (*routerDeviceServiceStub) Register(
+	context.Context,
+	deviceusecase.RegisterInput,
+	string,
+) (domain.DeviceSession, error) {
+	return domain.DeviceSession{}, nil
+}
+
+func (*routerDeviceServiceStub) Refresh(
+	context.Context,
+	deviceusecase.RefreshInput,
+	string,
+) (domain.DeviceSession, error) {
+	return domain.DeviceSession{}, nil
+}
+
+func (*routerDeviceServiceStub) Authenticate(context.Context, string) (string, error) {
+	return "72ab9284-7b7e-4f47-99b9-f7b682b2c718", nil
+}
+
+func (*routerDeviceServiceStub) Delete(context.Context, string) error {
+	return nil
 }
 
 func (stub *pingerStub) Ping(context.Context) error {
@@ -131,9 +159,12 @@ func TestUnknownRouteUsesStandardErrorEnvelope(t *testing.T) {
 func newTestRouter(pinger handlers.Pinger) http.Handler {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	healthHandler := handlers.NewHealthHandler(pinger, logger, "test-version", 100*time.Millisecond)
+	deviceService := &routerDeviceServiceStub{}
 	return httptransport.NewRouter(httptransport.RouterDependencies{
-		Logger:        logger,
-		HealthHandler: healthHandler,
-		MaxBodyBytes:  1024,
+		Logger:              logger,
+		HealthHandler:       healthHandler,
+		DeviceHandler:       handlers.NewDeviceHandler(deviceService, logger),
+		DeviceAuthenticator: deviceService,
+		MaxBodyBytes:        1024,
 	})
 }

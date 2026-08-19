@@ -1,4 +1,4 @@
-.PHONY: build check compose-down compose-logs compose-up fmt run test test-race vet
+.PHONY: build check compose-down compose-logs compose-up fmt run test test-integration test-race vet
 
 build:
 	go build ./...
@@ -14,6 +14,10 @@ test:
 
 test-race:
 	go test -race ./...
+
+test-integration:
+	@test -n "$(TEST_DATABASE_URL)"
+	go test -race ./internal/repository/postgres -run Integration -count=1 -v
 
 check: fmt vet test-race build
 

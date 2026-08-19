@@ -3,6 +3,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -17,6 +18,8 @@ type Config struct {
 	ShutdownTimeout time.Duration
 	HTTP            HTTPConfig
 	Database        DatabaseConfig
+	DeviceSessions  DeviceSessionConfig
+	Secrets         SecretsConfig
 }
 
 type HTTPConfig struct {
@@ -36,6 +39,17 @@ type DatabaseConfig struct {
 	MinConnections  int32
 	MaxConnLifetime time.Duration
 	MaxConnIdleTime time.Duration
+}
+
+type DeviceSessionConfig struct {
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	IdempotencyTTL  time.Duration
+}
+
+type SecretsConfig struct {
+	TokenPepper              []byte
+	IdempotencyEncryptionKey []byte
 }
 
 func Load() (Config, error) {
@@ -59,6 +73,11 @@ func Load() (Config, error) {
 			MinConnections:  2,
 			MaxConnLifetime: 30 * time.Minute,
 			MaxConnIdleTime: 5 * time.Minute,
+		},
+		DeviceSessions: DeviceSessionConfig{
+			AccessTokenTTL:  15 * time.Minute,
+			RefreshTokenTTL: 90 * 24 * time.Hour,
+			IdempotencyTTL:  24 * time.Hour,
 		},
 	}
 
@@ -99,6 +118,21 @@ func Load() (Config, error) {
 	if config.Database.MinConnections, err = nonNegativeInt32("DATABASE_MIN_CONNECTIONS", config.Database.MinConnections); err != nil {
 		return Config{}, err
 	}
+	if config.DeviceSessions.AccessTokenTTL, err = duration("ACCESS_TOKEN_TTL", config.DeviceSessions.AccessTokenTTL); err != nil {
+		return Config{}, err
+	}
+	if config.DeviceSessions.RefreshTokenTTL, err = duration("REFRESH_TOKEN_TTL", config.DeviceSessions.RefreshTokenTTL); err != nil {
+		return Config{}, err
+	}
+	if config.DeviceSessions.IdempotencyTTL, err = duration("IDEMPOTENCY_TTL", config.DeviceSessions.IdempotencyTTL); err != nil {
+		return Config{}, err
+	}
+	if config.Secrets.TokenPepper, err = secret("TOKEN_PEPPER_BASE64"); err != nil {
+		return Config{}, err
+	}
+	if config.Secrets.IdempotencyEncryptionKey, err = secret("IDEMPOTENCY_ENCRYPTION_KEY_BASE64"); err != nil {
+		return Config{}, err
+	}
 
 	if err := config.validate(); err != nil {
 		return Config{}, err
@@ -137,8 +171,24 @@ func (config Config) validate() error {
 	if config.Database.MinConnections > config.Database.MaxConnections {
 		return errors.New("DATABASE_MIN_CONNECTIONS cannot exceed DATABASE_MAX_CONNECTIONS")
 	}
+	if config.DeviceSessions.RefreshTokenTTL <= config.DeviceSessions.AccessTokenTTL {
+		return errors.New("REFRESH_TOKEN_TTL must exceed ACCESS_TOKEN_TTL")
+	}
 
 	return nil
+}
+
+func secret(key string) ([]byte, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil, fmt.Errorf("%s is required", key)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err != nil || len(decoded) != 32 {
+		return nil, fmt.Errorf("%s must be standard base64 encoding exactly 32 bytes", key)
+	}
+	return decoded, nil
 }
 
 func valueOrDefault(key string, fallback string) string {

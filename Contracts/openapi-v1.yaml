@@ -556,7 +556,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      bearerFormat: Opaque
   parameters:
     RequestID:
       name: X-Request-ID

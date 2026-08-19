@@ -13,9 +13,11 @@ import (
 )
 
 type RouterDependencies struct {
-	Logger        *slog.Logger
-	HealthHandler *handlers.HealthHandler
-	MaxBodyBytes  int64
+	Logger              *slog.Logger
+	HealthHandler       *handlers.HealthHandler
+	DeviceHandler       *handlers.DeviceHandler
+	DeviceAuthenticator appmiddleware.AccessTokenAuthenticator
+	MaxBodyBytes        int64
 }
 
 func NewRouter(dependencies RouterDependencies) http.Handler {
@@ -29,6 +31,13 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	router.Get("/livez", dependencies.HealthHandler.Live)
 	router.Get("/readyz", dependencies.HealthHandler.Ready)
 	router.Get("/v1/health", dependencies.HealthHandler.Public)
+	router.Route("/v1/devices", func(router chi.Router) {
+		router.Post("/register", dependencies.DeviceHandler.Register)
+		router.Post("/refresh", dependencies.DeviceHandler.Refresh)
+		router.With(
+			appmiddleware.RequireAccessToken(dependencies.DeviceAuthenticator, dependencies.Logger),
+		).Delete("/{device_id}", dependencies.DeviceHandler.Delete)
+	})
 
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, http.StatusNotFound, "not_found", "Resource not found.")

@@ -9,6 +9,7 @@ import (
 
 func TestLoadUsesProductionDefaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
 	t.Setenv("APP_ENV", "")
 	t.Setenv("HTTP_ADDRESS", "")
 	t.Setenv("HTTP_MAX_BODY_BYTES", "")
@@ -34,6 +35,7 @@ func TestLoadUsesProductionDefaults(t *testing.T) {
 
 func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
+	setTestSecrets(t)
 
 	_, err := Load()
 	if err == nil {
@@ -43,6 +45,7 @@ func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
 
 func TestLoadRejectsInvalidDuration(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
 	t.Setenv("HTTP_READ_TIMEOUT", "later")
 
 	_, err := Load()
@@ -53,6 +56,7 @@ func TestLoadRejectsInvalidDuration(t *testing.T) {
 
 func TestLoadRejectsInvalidPoolBounds(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
 	t.Setenv("DATABASE_MIN_CONNECTIONS", "5")
 	t.Setenv("DATABASE_MAX_CONNECTIONS", "2")
 
@@ -60,4 +64,33 @@ func TestLoadRejectsInvalidPoolBounds(t *testing.T) {
 	if err == nil {
 		t.Fatal("Load() error = nil, want pool validation error")
 	}
+}
+
+func TestLoadRejectsMissingTokenPepper(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	t.Setenv("TOKEN_PEPPER_BASE64", "")
+	t.Setenv("IDEMPOTENCY_ENCRYPTION_KEY_BASE64", "bG9jYWwtaWRlbXBvdGVuY3ktMzItYnl0ZS12YWx1ZXM=")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want missing secret error")
+	}
+}
+
+func TestLoadRejectsRefreshTTLShorterThanAccessTTL(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("ACCESS_TOKEN_TTL", "2h")
+	t.Setenv("REFRESH_TOKEN_TTL", "1h")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want token TTL validation error")
+	}
+}
+
+func setTestSecrets(t *testing.T) {
+	t.Helper()
+	t.Setenv("TOKEN_PEPPER_BASE64", "bG9jYWwtdG9rZW4tcGVwcGVyLTMyLWJ5dGUtdmFsdWU=")
+	t.Setenv("IDEMPOTENCY_ENCRYPTION_KEY_BASE64", "bG9jYWwtaWRlbXBvdGVuY3ktMzItYnl0ZS12YWx1ZXM=")
 }
