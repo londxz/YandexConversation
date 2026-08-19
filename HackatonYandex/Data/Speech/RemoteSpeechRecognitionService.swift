@@ -16,8 +16,13 @@ final class RemoteSpeechRecognitionService: SpeechRecognitionService {
 
     func transcribeAudio(
         fileURL: URL,
+        language: String,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
     ) {
-        apiClient.uploadWavFile(fileURL: fileURL, completion: completion)
+        apiClient.uploadWavFile(
+            fileURL: fileURL,
+            language: language,
+            completion: completion
+        )
     }
 }

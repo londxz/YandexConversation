@@ -17,6 +17,8 @@ final class AppCoordinator: Coordinator {
     }
 
     func start() {
+        container.prepareRuntimeServices()
+
         if container.appStateStore.hasSeenOnboarding {
             showMain(animated: false)
         } else {

@@ -117,8 +117,8 @@ struct PhraseFolder: Codable, Equatable, Identifiable {
 
 struct AppSettings: Codable, Equatable {
     enum PrivacyMode: String, Codable {
+        case standard
         case localOnly
-        case syncEnabled
     }
 
     var recognitionLanguage: String

@@ -63,6 +63,12 @@
 		4D100001000000000000001D /* HistoryDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000001D /* HistoryDetailViewController.swift */; };
 		4D100001000000000000001E /* HistoryMessageBubbleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000001E /* HistoryMessageBubbleCell.swift */; };
 		4D100001000000000000001F /* HistoryDateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D200001000000000000001F /* HistoryDateFormatter.swift */; };
+		4D1000010000000000000020 /* CoreDataSettingsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000020 /* CoreDataSettingsRepository.swift */; };
+		4D1000010000000000000021 /* CoreDataLocalDataRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000021 /* CoreDataLocalDataRepository.swift */; };
+		4D1000010000000000000022 /* SettingsUseCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000022 /* SettingsUseCases.swift */; };
+		4D1000010000000000000023 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000023 /* SettingsView.swift */; };
+		4D1000010000000000000024 /* SettingsPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000024 /* SettingsPresenter.swift */; };
+		4D1000010000000000000025 /* SettingsCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2000010000000000000025 /* SettingsCells.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -124,6 +130,12 @@
 		4D200001000000000000001D /* HistoryDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDetailViewController.swift; sourceTree = "<group>"; };
 		4D200001000000000000001E /* HistoryMessageBubbleCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryMessageBubbleCell.swift; sourceTree = "<group>"; };
 		4D200001000000000000001F /* HistoryDateFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDateFormatter.swift; sourceTree = "<group>"; };
+		4D2000010000000000000020 /* CoreDataSettingsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataSettingsRepository.swift; sourceTree = "<group>"; };
+		4D2000010000000000000021 /* CoreDataLocalDataRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataLocalDataRepository.swift; sourceTree = "<group>"; };
+		4D2000010000000000000022 /* SettingsUseCases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUseCases.swift; sourceTree = "<group>"; };
+		4D2000010000000000000023 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		4D2000010000000000000024 /* SettingsPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPresenter.swift; sourceTree = "<group>"; };
+		4D2000010000000000000025 /* SettingsCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCells.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -251,6 +263,8 @@
 			children = (
 				4D2000010000000000000012 /* CoreDataConversationRepository.swift */,
 				4D2000010000000000000015 /* CoreDataPhraseRepository.swift */,
+				4D2000010000000000000020 /* CoreDataSettingsRepository.swift */,
+				4D2000010000000000000021 /* CoreDataLocalDataRepository.swift */,
 			);
 			path = Repositories;
 			sourceTree = "<group>";
@@ -304,6 +318,7 @@
 			children = (
 				4D2000010000000000000013 /* ConversationUseCases.swift */,
 				4D2000010000000000000016 /* PhraseUseCases.swift */,
+				4D2000010000000000000022 /* SettingsUseCases.swift */,
 			);
 			path = UseCases;
 			sourceTree = "<group>";
@@ -355,7 +370,10 @@
 		4D300001000000000000000B /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				4D2000010000000000000023 /* SettingsView.swift */,
+				4D2000010000000000000024 /* SettingsPresenter.swift */,
 				4D200001000000000000000A /* SettingsViewController.swift */,
+				4D2000010000000000000025 /* SettingsCells.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -589,6 +607,12 @@
 				4D100001000000000000000E /* RemoteSpeechRecognitionService.swift in Sources */,
 				4D1000010000000000000012 /* CoreDataConversationRepository.swift in Sources */,
 				4D1000010000000000000015 /* CoreDataPhraseRepository.swift in Sources */,
+				4D1000010000000000000020 /* CoreDataSettingsRepository.swift in Sources */,
+				4D1000010000000000000021 /* CoreDataLocalDataRepository.swift in Sources */,
+				4D1000010000000000000022 /* SettingsUseCases.swift in Sources */,
+				4D1000010000000000000023 /* SettingsView.swift in Sources */,
+				4D1000010000000000000024 /* SettingsPresenter.swift in Sources */,
+				4D1000010000000000000025 /* SettingsCells.swift in Sources */,
 				4D1000010000000000000006 /* AppCoordinator.swift in Sources */,
 				4D1000010000000000000008 /* RepositoryProtocols.swift in Sources */,
 				3C4270DB2DECBBB400AA34D9 /* TalkViewController.swift in Sources */,

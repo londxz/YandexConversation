@@ -49,6 +49,12 @@ final class AppContainer {
     private(set) lazy var phraseRepository: PhraseRepository = CoreDataPhraseRepository(
         coreDataStack: coreDataStack
     )
+    private(set) lazy var settingsRepository: SettingsRepository = CoreDataSettingsRepository(
+        coreDataStack: coreDataStack
+    )
+    private(set) lazy var localDataRepository: LocalDataRepository = CoreDataLocalDataRepository(
+        coreDataStack: coreDataStack
+    )
     private(set) lazy var fetchConversationHistoryUseCase = FetchConversationHistoryUseCase(
         repository: conversationRepository
     )
@@ -79,6 +85,15 @@ final class AppContainer {
     private(set) lazy var recordPhraseUsageUseCase = RecordPhraseUsageUseCase(
         repository: phraseRepository
     )
+    private(set) lazy var fetchSettingsUseCase = FetchSettingsUseCase(
+        repository: settingsRepository
+    )
+    private(set) lazy var saveSettingsUseCase = SaveSettingsUseCase(
+        repository: settingsRepository
+    )
+    private(set) lazy var deleteAllUserDataUseCase = DeleteAllUserDataUseCase(
+        repository: localDataRepository
+    )
 
     init(
         config: AppConfig = .makeDefault(),
@@ -86,5 +101,20 @@ final class AppContainer {
     ) {
         self.config = config
         self.appStateStore = appStateStore
+    }
+
+    func prepareRuntimeServices() {
+        Task { [weak self] in
+            guard let self else { return }
+
+            do {
+                let settings = try await self.fetchSettingsUseCase.execute()
+                await MainActor.run {
+                    self.textToSpeechService.apply(settings: settings)
+                }
+            } catch {
+                AppLogger.error("Failed to prepare runtime settings: \(error.localizedDescription)")
+            }
+        }
     }
 }

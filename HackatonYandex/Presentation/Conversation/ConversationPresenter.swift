@@ -35,6 +35,7 @@ enum ConversationMode {
 struct ConversationViewModel {
     let mode: ConversationMode
     let isInputVisible: Bool
+    let transcriptFontScale: Float
 }
 
 private enum VoiceInputState {
@@ -58,23 +59,27 @@ protocol ConversationView: AnyObject {
     func resetConversationDisplay()
 }
 
+@MainActor
 final class ConversationPresenter {
     private weak var view: ConversationView?
     private let microphonePermissionService: MicrophonePermissionService
     private let audioRecordingService: AudioRecordingService
     private let speechRecognitionService: SpeechRecognitionService
+    private let fetchSettingsUseCase: FetchSettingsUseCase
     private let saveConversationUseCase: SaveConversationUseCase
     private let addConversationMessageUseCase: AddConversationMessageUseCase
     private var mode: ConversationMode = .talk
     private var voiceInputState: VoiceInputState = .idle
     private var currentConversation: Conversation
     private var hasPersistedConversation = false
+    private var settings = AppSettings.defaultValue
 
     init(
         view: ConversationView,
         microphonePermissionService: MicrophonePermissionService,
         audioRecordingService: AudioRecordingService,
         speechRecognitionService: SpeechRecognitionService,
+        fetchSettingsUseCase: FetchSettingsUseCase,
         saveConversationUseCase: SaveConversationUseCase,
         addConversationMessageUseCase: AddConversationMessageUseCase
     ) {
@@ -82,6 +87,7 @@ final class ConversationPresenter {
         self.microphonePermissionService = microphonePermissionService
         self.audioRecordingService = audioRecordingService
         self.speechRecognitionService = speechRecognitionService
+        self.fetchSettingsUseCase = fetchSettingsUseCase
         self.saveConversationUseCase = saveConversationUseCase
         self.addConversationMessageUseCase = addConversationMessageUseCase
         self.currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
@@ -89,6 +95,11 @@ final class ConversationPresenter {
 
     func viewDidLoad() {
         renderCurrentMode()
+        refreshSettings()
+    }
+
+    func viewWillAppear() {
+        refreshSettings()
     }
 
     func viewDidDisappear() {
@@ -119,6 +130,13 @@ final class ConversationPresenter {
     @discardableResult
     func didRequestStartVoiceRecording() -> Bool {
         guard voiceInputState == .idle else {
+            return false
+        }
+
+        guard settings.privacyMode != .localOnly else {
+            view?.displayConversationError(
+                "Распознавание через сервер отключено в настройках конфиденциальности."
+            )
             return false
         }
 
@@ -167,7 +185,10 @@ final class ConversationPresenter {
         voiceInputState = .recognizing
         let conversationId = currentConversation.id
         let audioRecordingService = audioRecordingService
-        speechRecognitionService.transcribeAudio(fileURL: fileURL) { [weak self] result in
+        speechRecognitionService.transcribeAudio(
+            fileURL: fileURL,
+            language: settings.recognitionLanguage
+        ) { [weak self] result in
             DispatchQueue.main.async {
                 audioRecordingService.discardRecording(at: fileURL)
                 guard let self else { return }
@@ -222,7 +243,8 @@ final class ConversationPresenter {
         view?.render(
             ConversationViewModel(
                 mode: mode,
-                isInputVisible: mode == .talk
+                isInputVisible: mode == .talk,
+                transcriptFontScale: settings.transcriptFontScale
             )
         )
     }
@@ -273,6 +295,8 @@ final class ConversationPresenter {
     }
 
     private func persistCurrentConversation() {
+        guard settings.saveConversationsByDefault else { return }
+
         let conversation = currentConversation
 
         Task { [saveConversationUseCase] in
@@ -291,6 +315,8 @@ final class ConversationPresenter {
         speakerLabel: String?,
         audioDurationMs: Int?
     ) {
+        guard settings.saveConversationsByDefault else { return }
+
         let now = Date()
         if !hasPersistedConversation {
             currentConversation.title = Self.makeConversationTitle(from: text)
@@ -335,6 +361,18 @@ final class ConversationPresenter {
                 audioRecordingService.discardRecording(at: fileURL)
             }
             voiceInputState = .idle
+        }
+    }
+
+    private func refreshSettings() {
+        Task { [weak self, fetchSettingsUseCase] in
+            do {
+                let settings = try await fetchSettingsUseCase.execute()
+                self?.settings = settings
+                self?.renderCurrentMode()
+            } catch {
+                AppLogger.error("Failed to refresh conversation settings: \(error.localizedDescription)")
+            }
         }
     }
 

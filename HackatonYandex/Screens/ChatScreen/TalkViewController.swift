@@ -24,6 +24,8 @@ class TalkViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private var hasMessages = false
+    private var transcriptFontScale: CGFloat = 1
+    private var transcriptLabels: [UILabel: CGFloat] = [:]
 
     init(textToSpeechService: TextToSpeechService) {
         self.textToSpeechService = textToSpeechService
@@ -56,6 +58,13 @@ class TalkViewController: UIViewController {
         appendIncomingBubble(text, speakerLabel: speakerLabel)
     }
 
+    func applyTranscriptFontScale(_ scale: Float) {
+        transcriptFontScale = CGFloat(min(max(scale, 0.85), 1.60))
+        for (label, baseSize) in transcriptLabels {
+            label.font = transcriptFont(baseSize: baseSize)
+        }
+    }
+
     func clearMessages() {
         guard isViewLoaded else {
             hasMessages = false
@@ -66,6 +75,7 @@ class TalkViewController: UIViewController {
             stackView.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
+        transcriptLabels.removeAll()
         hasMessages = false
         scrollView.setContentOffset(.zero, animated: false)
     }
@@ -115,7 +125,7 @@ class TalkViewController: UIViewController {
 
         voiceButton.addAction(
             UIAction { [weak self] _ in
-                self?.textToSpeechService.speak(text, language: "ru-RU")
+                self?.textToSpeechService.speak(text)
             },
             for: .touchUpInside
         )
@@ -131,8 +141,9 @@ class TalkViewController: UIViewController {
         messageLabel.text = text
         messageLabel.numberOfLines = 0
         messageLabel.textColor = .black
-        messageLabel.font = UIFont(name: "YSDisplay-Medium", size: 24)
-            ?? .systemFont(ofSize: 24, weight: .medium)
+        messageLabel.font = transcriptFont(baseSize: 24)
+        messageLabel.adjustsFontForContentSizeCategory = true
+        transcriptLabels[messageLabel] = 24
         messageLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let menuButton = UIButton(type: .system)
@@ -223,7 +234,9 @@ class TalkViewController: UIViewController {
         messageLabel.text = text
         messageLabel.numberOfLines = 0
         messageLabel.textColor = .black
-        messageLabel.font = UIFont(name: "YSDisplay-Medium", size: 18) ?? .systemFont(ofSize: 18, weight: .medium)
+        messageLabel.font = transcriptFont(baseSize: 18)
+        messageLabel.adjustsFontForContentSizeCategory = true
+        transcriptLabels[messageLabel] = 18
         messageStack.addArrangedSubview(messageLabel)
 
         bubbleView.addSubview(messageStack)
@@ -251,7 +264,7 @@ class TalkViewController: UIViewController {
             title: "Озвучить",
             image: UIImage(named: "to_voice")
         ) { [weak self] _ in
-            self?.textToSpeechService.speak(text, language: "ru-RU")
+            self?.textToSpeechService.speak(text)
         }
 
         let copyAction = UIAction(
@@ -270,6 +283,13 @@ class TalkViewController: UIViewController {
             y: max(0, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
         )
         scrollView.setContentOffset(bottomOffset, animated: true)
+    }
+
+    private func transcriptFont(baseSize: CGFloat) -> UIFont {
+        let size = baseSize * transcriptFontScale
+        let baseFont = UIFont(name: "YSDisplay-Medium", size: size)
+            ?? .systemFont(ofSize: size, weight: .medium)
+        return UIFontMetrics(forTextStyle: .body).scaledFont(for: baseFont)
     }
 }
 

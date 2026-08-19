@@ -28,6 +28,7 @@ class ChatVC: UIViewController {
         microphonePermissionService: container.microphonePermissionService,
         audioRecordingService: container.audioRecordingService,
         speechRecognitionService: container.speechRecognitionService,
+        fetchSettingsUseCase: container.fetchSettingsUseCase,
         saveConversationUseCase: container.saveConversationUseCase,
         addConversationMessageUseCase: container.addConversationMessageUseCase
     )
@@ -74,6 +75,11 @@ class ChatVC: UIViewController {
         talkVC.delegate = self
         chatComponent.delegate = self
         presenter.viewDidLoad()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        presenter.viewWillAppear()
     }
     
     deinit {

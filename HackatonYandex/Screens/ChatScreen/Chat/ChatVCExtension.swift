@@ -38,6 +38,8 @@ extension ChatVC: ConversationView {
     func render(_ viewModel: ConversationViewModel) {
         currentConversationMode = viewModel.mode
         segmentControlComponent.setSelectedIndex(viewModel.mode.segmentIndex)
+        talkVC.applyTranscriptFontScale(viewModel.transcriptFontScale)
+        listenVC.applyTranscriptFontScale(viewModel.transcriptFontScale)
 
         if !viewModel.isInputVisible {
             hideQuickPhrasePanel(animated: false)

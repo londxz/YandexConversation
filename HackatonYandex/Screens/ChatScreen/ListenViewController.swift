@@ -11,6 +11,8 @@ class ListenViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private let emptyStateLabel = UILabel()
+    private var transcriptFontScale: CGFloat = 1
+    private var transcriptLabels: [UILabel] = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -30,7 +32,9 @@ class ListenViewController: UIViewController {
         textLabel.text = text
         textLabel.numberOfLines = 0
         textLabel.textColor = .black
-        textLabel.font = UIFont(name: "YSDisplay-Medium", size: 24) ?? .systemFont(ofSize: 24, weight: .medium)
+        textLabel.font = transcriptFont()
+        textLabel.adjustsFontForContentSizeCategory = true
+        transcriptLabels.append(textLabel)
 
         let messageStack = UIStackView(arrangedSubviews: [speakerLabelView, textLabel])
         messageStack.axis = .vertical
@@ -49,8 +53,14 @@ class ListenViewController: UIViewController {
             stackView.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
+        transcriptLabels.removeAll()
         emptyStateLabel.isHidden = false
         scrollView.setContentOffset(.zero, animated: false)
+    }
+
+    func applyTranscriptFontScale(_ scale: Float) {
+        transcriptFontScale = CGFloat(min(max(scale, 0.85), 1.60))
+        transcriptLabels.forEach { $0.font = transcriptFont() }
     }
 
     private func setupTranscriptView() {
@@ -97,5 +107,12 @@ class ListenViewController: UIViewController {
             y: max(0, scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom)
         )
         scrollView.setContentOffset(bottomOffset, animated: true)
+    }
+
+    private func transcriptFont() -> UIFont {
+        let size = 24 * transcriptFontScale
+        let baseFont = UIFont(name: "YSDisplay-Medium", size: size)
+            ?? .systemFont(ofSize: size, weight: .medium)
+        return UIFontMetrics(forTextStyle: .body).scaledFont(for: baseFont)
     }
 }

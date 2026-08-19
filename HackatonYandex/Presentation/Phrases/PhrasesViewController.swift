@@ -814,7 +814,7 @@ private final class PhraseDisplayOverlayView: UIView {
     }
 
     @objc private func playTapped() {
-        textToSpeechService.speak(text, language: "ru-RU")
+        textToSpeechService.speak(text)
     }
 
     @objc private func rotateTapped() {

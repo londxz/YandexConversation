@@ -26,6 +26,10 @@ protocol SettingsRepository {
     func saveSettings(_ settings: AppSettings) async throws
 }
 
+protocol LocalDataRepository {
+    func deleteAllUserData() async throws
+}
+
 protocol SpeechRecognitionRepository {
     func transcribeAudio(fileURL: URL) async throws -> SpeechToTextModel
 }

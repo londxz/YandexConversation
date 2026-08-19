@@ -28,14 +28,23 @@ final class APIClient {
         self.requestQueue = requestQueue
     }
 
-    func uploadWavFile(fileURL: URL, completion: @escaping (Result<SpeechToTextModel, Error>) -> Void) {
+    func uploadWavFile(
+        fileURL: URL,
+        language: String,
+        completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
+    ) {
         requestQueue.async {
-            self.performUploadWavFile(fileURL: fileURL, completion: completion)
+            self.performUploadWavFile(
+                fileURL: fileURL,
+                language: language,
+                completion: completion
+            )
         }
     }
 
     private func performUploadWavFile(
         fileURL: URL,
+        language: String,
         completion: @escaping (Result<SpeechToTextModel, Error>) -> Void
     ) {
         let url = config.apiBaseURL.appendingPathComponent(Endpoint.speechTranscribe)
@@ -48,7 +57,7 @@ final class APIClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var data = Data()
-        appendMultipartField(name: "language", value: "ru-RU", boundary: boundary, to: &data)
+        appendMultipartField(name: "language", value: language, boundary: boundary, to: &data)
         appendMultipartFileHeader(
             fieldName: "file",
             filename: fileURL.lastPathComponent,

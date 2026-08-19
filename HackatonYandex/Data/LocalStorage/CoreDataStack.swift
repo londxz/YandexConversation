@@ -161,11 +161,30 @@ private extension CoreDataStack {
         ]
         metadataEntity.uniquenessConstraints = [["key"]]
 
+        let settingsEntity = NSEntityDescription()
+        settingsEntity.name = "CDAppSettings"
+        settingsEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        settingsEntity.properties = [
+            attribute("id", type: .stringAttributeType),
+            attribute("recognitionLanguage", type: .stringAttributeType),
+            attribute("ttsLanguage", type: .stringAttributeType),
+            attribute("ttsVoiceIdentifier", type: .stringAttributeType, isOptional: true),
+            attribute("speechRate", type: .floatAttributeType),
+            attribute("transcriptFontScale", type: .floatAttributeType),
+            attribute("autoStartMicrophone", type: .booleanAttributeType),
+            attribute("saveConversationsByDefault", type: .booleanAttributeType),
+            attribute("syncEnabled", type: .booleanAttributeType),
+            attribute("privacyMode", type: .stringAttributeType),
+            attribute("updatedAt", type: .dateAttributeType)
+        ]
+        settingsEntity.uniquenessConstraints = [["id"]]
+
         model.entities = [
             conversationEntity,
             messageEntity,
             phraseEntity,
-            metadataEntity
+            metadataEntity,
+            settingsEntity
         ]
 
         return model
