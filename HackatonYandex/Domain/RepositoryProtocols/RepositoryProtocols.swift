@@ -37,3 +37,10 @@ protocol LocalDataRepository {
 protocol SpeechRecognitionRepository {
     func transcribeAudio(fileURL: URL) async throws -> SpeechToTextModel
 }
+
+protocol DeviceSessionRepository: AnyObject {
+    func session() async throws -> DeviceSession
+    func accessToken() async throws -> String
+    func refreshAccessToken(rejectedAccessToken: String) async throws -> String
+    func deleteRemoteSession() async throws
+}

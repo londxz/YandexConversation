@@ -23,6 +23,30 @@ Expected response:
 }
 ```
 
+## Test from the iOS app
+
+Start the local stack, then add these environment variables to the Xcode Run
+scheme for a Debug build:
+
+```text
+RAZGOVOR_API_BASE_URL=http://127.0.0.1:8080
+RAZGOVOR_EAGER_DEVICE_REGISTRATION=1
+```
+
+Run the app in iOS Simulator. The eager-registration flag is compiled only in
+Debug and exists solely for local integration checks. Production builds create
+the anonymous device session lazily on the first backend request.
+
+Verify that the app registered exactly one device:
+
+```bash
+docker compose exec -T postgres \
+  psql -U razgovor -d razgovor -tAc 'SELECT count(*) FROM devices;'
+```
+
+Relaunching the app must not increase the count: the installation session is
+restored from Keychain instead of being registered again.
+
 Probe endpoints:
 
 - `GET /livez` checks whether the API process is alive.

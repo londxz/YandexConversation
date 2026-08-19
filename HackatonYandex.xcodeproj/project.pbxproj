@@ -34,6 +34,12 @@
 		5D1000010000000000000003 /* LargeTextDisplayPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2000010000000000000003 /* LargeTextDisplayPresenterTests.swift */; };
 		5D1000010000000000000004 /* CoreDataRepositoriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2000010000000000000004 /* CoreDataRepositoriesTests.swift */; };
 		5D1000010000000000000005 /* APIContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2000010000000000000006 /* APIContractTests.swift */; };
+		6D1000010000000000000001 /* DeviceSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2000010000000000000001 /* DeviceSession.swift */; };
+		6D1000010000000000000002 /* HTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2000010000000000000002 /* HTTPClient.swift */; };
+		6D1000010000000000000003 /* DeviceSessionRemoteDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2000010000000000000003 /* DeviceSessionRemoteDataSource.swift */; };
+		6D1000010000000000000004 /* KeychainDeviceSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2000010000000000000004 /* KeychainDeviceSessionStore.swift */; };
+		6D1000010000000000000005 /* DefaultDeviceSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2000010000000000000005 /* DefaultDeviceSessionRepository.swift */; };
+		6D1000010000000000000006 /* DeviceSessionRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2000010000000000000006 /* DeviceSessionRepositoryTests.swift */; };
 		3C4270EA2DED13B300AA34D9 /* TabBarController+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4270E92DED13AC00AA34D9 /* TabBarController+Extension.swift */; };
 		3C728F3F2DED2CC2007F9AC4 /* ChatVC+Keyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C728F3E2DED2CB7007F9AC4 /* ChatVC+Keyboard.swift */; };
 		3C8BF3972DEC83AC0029F770 /* TabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C8BF3962DEC83A70029F770 /* TabBarController.swift */; };
@@ -165,6 +171,12 @@
 		5D2000010000000000000004 /* CoreDataRepositoriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataRepositoriesTests.swift; sourceTree = "<group>"; };
 		5D2000010000000000000005 /* HackatonYandexTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HackatonYandexTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D2000010000000000000006 /* APIContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIContractTests.swift; sourceTree = "<group>"; };
+		6D2000010000000000000001 /* DeviceSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSession.swift; sourceTree = "<group>"; };
+		6D2000010000000000000002 /* HTTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPClient.swift; sourceTree = "<group>"; };
+		6D2000010000000000000003 /* DeviceSessionRemoteDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSessionRemoteDataSource.swift; sourceTree = "<group>"; };
+		6D2000010000000000000004 /* KeychainDeviceSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainDeviceSessionStore.swift; sourceTree = "<group>"; };
+		6D2000010000000000000005 /* DefaultDeviceSessionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultDeviceSessionRepository.swift; sourceTree = "<group>"; };
+		6D2000010000000000000006 /* DeviceSessionRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSessionRepositoryTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -211,6 +223,7 @@
 				5D2000010000000000000003 /* LargeTextDisplayPresenterTests.swift */,
 				5D2000010000000000000004 /* CoreDataRepositoriesTests.swift */,
 				5D2000010000000000000006 /* APIContractTests.swift */,
+				6D2000010000000000000006 /* DeviceSessionRepositoryTests.swift */,
 			);
 			path = HackatonYandexTests;
 			sourceTree = "<group>";
@@ -304,6 +317,7 @@
 			isa = PBXGroup;
 			children = (
 				4D2000010000000000000011 /* CoreDataStack.swift */,
+				6D2000010000000000000004 /* KeychainDeviceSessionStore.swift */,
 			);
 			path = LocalStorage;
 			sourceTree = "<group>";
@@ -315,6 +329,7 @@
 				4D2000010000000000000015 /* CoreDataPhraseRepository.swift */,
 				4D2000010000000000000020 /* CoreDataSettingsRepository.swift */,
 				4D2000010000000000000021 /* CoreDataLocalDataRepository.swift */,
+				6D2000010000000000000005 /* DefaultDeviceSessionRepository.swift */,
 			);
 			path = Repositories;
 			sourceTree = "<group>";
@@ -343,6 +358,7 @@
 			isa = PBXGroup;
 			children = (
 				4D2000010000000000000007 /* DomainModels.swift */,
+				6D2000010000000000000001 /* DeviceSession.swift */,
 			);
 			path = Entities;
 			sourceTree = "<group>";
@@ -532,6 +548,8 @@
 			isa = PBXGroup;
 			children = (
 				3CBB48C02DEDBA4900A288A3 /* APIClient.swift */,
+				6D2000010000000000000002 /* HTTPClient.swift */,
+				6D2000010000000000000003 /* DeviceSessionRemoteDataSource.swift */,
 				3CBB48C32DEDBA6E00A288A3 /* Models */,
 			);
 			path = Network;
@@ -706,6 +724,11 @@
 				4D1000010000000000000006 /* AppCoordinator.swift in Sources */,
 				4D1000010000000000000008 /* RepositoryProtocols.swift in Sources */,
 				3C4270DB2DECBBB400AA34D9 /* TalkViewController.swift in Sources */,
+				6D1000010000000000000001 /* DeviceSession.swift in Sources */,
+				6D1000010000000000000002 /* HTTPClient.swift in Sources */,
+				6D1000010000000000000003 /* DeviceSessionRemoteDataSource.swift in Sources */,
+				6D1000010000000000000004 /* KeychainDeviceSessionStore.swift in Sources */,
+				6D1000010000000000000005 /* DefaultDeviceSessionRepository.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -718,6 +741,7 @@
 				5D1000010000000000000003 /* LargeTextDisplayPresenterTests.swift in Sources */,
 				5D1000010000000000000004 /* CoreDataRepositoriesTests.swift in Sources */,
 				5D1000010000000000000005 /* APIContractTests.swift in Sources */,
+				6D1000010000000000000006 /* DeviceSessionRepositoryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

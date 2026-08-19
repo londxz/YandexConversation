@@ -23,7 +23,13 @@ final class APIContractTests: XCTestCase {
             apiBaseURL: try XCTUnwrap(URL(string: "https://api.example.com")),
             requestTimeout: 5
         )
-        let client = APIClient(config: config, urlSession: session)
+        let client = APIClient(
+            httpClient: HTTPClient(config: config, urlSession: session),
+            deviceSessionRepository: DeviceSessionRepositoryStub(
+                accessToken: "access-token",
+                refreshedAccessToken: "fresh-access-token"
+            )
+        )
         let audioURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("api-contract-\(UUID().uuidString).wav")
         try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioURL)
@@ -33,6 +39,10 @@ final class APIContractTests: XCTestCase {
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.path, "/v1/speech/transcribe")
             XCTAssertNotNil(request.value(forHTTPHeaderField: "X-Request-ID"))
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer access-token"
+            )
             XCTAssertTrue(
                 request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true
             )
@@ -68,6 +78,243 @@ final class APIContractTests: XCTestCase {
         XCTAssertEqual(result.language, "ru-RU")
         XCTAssertEqual(result.durationMs, 1250)
         XCTAssertEqual(result.confidence, 0.94)
+    }
+
+    func testDeviceRegistrationRequestAndResponseFollowV1Contract() async throws {
+        let session = makeStubbedURLSession()
+        let config = makeConfig()
+        let httpClient = HTTPClient(config: config, urlSession: session)
+        let remoteDataSource = DefaultDeviceSessionRemoteDataSource(
+            httpClient: httpClient,
+            metadataProvider: DeviceMetadataStub(
+                appVersion: "1.2.3",
+                locale: "ru-RU"
+            )
+        )
+
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/v1/devices/register")
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Idempotency-Key"),
+                "registration-idempotency-key"
+            )
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Content-Type"),
+                "application/json"
+            )
+
+            let body = try self.requestBody(from: request)
+            let json = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: body) as? [String: String]
+            )
+            XCTAssertEqual(json["platform"], "ios")
+            XCTAssertEqual(json["app_version"], "1.2.3")
+            XCTAssertEqual(json["locale"], "ru-RU")
+
+            let response = try XCTUnwrap(HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 201,
+                httpVersion: nil,
+                headerFields: nil
+            ))
+            let responseBody = Data(
+                """
+                {
+                  "device_id": "682e61f1-d211-4a20-8b5c-48a164bc4043",
+                  "access_token": "access-token",
+                  "refresh_token": "refresh-token",
+                  "expires_at": "2026-08-19T18:00:00.123Z"
+                }
+                """.utf8
+            )
+            return (response, responseBody)
+        }
+
+        let deviceSession = try await remoteDataSource.register(
+            idempotencyKey: "registration-idempotency-key"
+        )
+
+        XCTAssertEqual(
+            deviceSession.deviceID,
+            "682e61f1-d211-4a20-8b5c-48a164bc4043"
+        )
+        XCTAssertEqual(deviceSession.accessToken, "access-token")
+        XCTAssertEqual(deviceSession.refreshToken, "refresh-token")
+    }
+
+    func testAuthorizedRequestRefreshesOnceAfterUnauthorizedResponse() async throws {
+        let session = makeStubbedURLSession()
+        let repository = DeviceSessionRepositoryStub(
+            accessToken: "expired-access-token",
+            refreshedAccessToken: "fresh-access-token"
+        )
+        let client = APIClient(
+            httpClient: HTTPClient(config: makeConfig(), urlSession: session),
+            deviceSessionRepository: repository
+        )
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("authorized-api-contract-\(UUID().uuidString).wav")
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioURL)
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+
+        let requestCounter = LockedCounter()
+        URLProtocolStub.handler = { request in
+            let attempt = requestCounter.increment()
+            let expectedToken = attempt == 1
+                ? "expired-access-token"
+                : "fresh-access-token"
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer \(expectedToken)"
+            )
+
+            let response = try XCTUnwrap(HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: attempt == 1 ? 401 : 200,
+                httpVersion: nil,
+                headerFields: nil
+            ))
+            if attempt == 1 {
+                return (
+                    response,
+                    Data(
+                        """
+                        {
+                          "error": {
+                            "code": "invalid_credentials",
+                            "message": "Credentials are expired.",
+                            "request_id": "request-auth"
+                          }
+                        }
+                        """.utf8
+                    )
+                )
+            }
+            return (
+                response,
+                Data(
+                    """
+                    {
+                      "text": "Здравствуйте",
+                      "language": "ru-RU",
+                      "duration_ms": 800,
+                      "confidence": 0.9
+                    }
+                    """.utf8
+                )
+            )
+        }
+
+        let result = try await withCheckedThrowingContinuation { continuation in
+            client.uploadWavFile(fileURL: audioURL, language: "ru-RU") { result in
+                continuation.resume(with: result)
+            }
+        }
+
+        XCTAssertEqual(result.text, "Здравствуйте")
+        XCTAssertEqual(requestCounter.value, 2)
+        let refreshArguments = await repository.recordedRejectedTokens()
+        XCTAssertEqual(refreshArguments, ["expired-access-token"])
+    }
+
+    private func makeConfig() -> AppConfig {
+        AppConfig(
+            environment: .development,
+            apiBaseURL: URL(string: "https://api.example.com")!,
+            requestTimeout: 5
+        )
+    }
+
+    private func makeStubbedURLSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        return URLSession(configuration: configuration)
+    }
+
+    private func requestBody(from request: URLRequest) throws -> Data {
+        if let body = request.httpBody {
+            return body
+        }
+
+        let stream = try XCTUnwrap(request.httpBodyStream)
+        stream.open()
+        defer { stream.close() }
+
+        var body = Data()
+        let bufferSize = 1_024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while stream.hasBytesAvailable {
+            let bytesRead = stream.read(buffer, maxLength: bufferSize)
+            if bytesRead < 0 {
+                throw try XCTUnwrap(stream.streamError)
+            }
+            if bytesRead == 0 {
+                break
+            }
+            body.append(buffer, count: bytesRead)
+        }
+        return body
+    }
+}
+
+private struct DeviceMetadataStub: DeviceMetadataProviding {
+    let appVersion: String
+    let locale: String
+}
+
+private actor DeviceSessionRepositoryStub: DeviceSessionRepository {
+    private let initialAccessToken: String
+    private let refreshedAccessToken: String
+    private var rejectedTokens: [String] = []
+
+    init(accessToken: String, refreshedAccessToken: String) {
+        initialAccessToken = accessToken
+        self.refreshedAccessToken = refreshedAccessToken
+    }
+
+    func session() async throws -> DeviceSession {
+        DeviceSession(
+            deviceID: UUID().uuidString,
+            accessToken: initialAccessToken,
+            refreshToken: "refresh-token",
+            expiresAt: Date().addingTimeInterval(3_600)
+        )
+    }
+
+    func accessToken() async throws -> String {
+        initialAccessToken
+    }
+
+    func refreshAccessToken(rejectedAccessToken: String) async throws -> String {
+        rejectedTokens.append(rejectedAccessToken)
+        return refreshedAccessToken
+    }
+
+    func deleteRemoteSession() async throws {}
+
+    func recordedRejectedTokens() -> [String] {
+        rejectedTokens
+    }
+}
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedValue
+    }
+
+    func increment() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        storedValue += 1
+        return storedValue
     }
 }
 

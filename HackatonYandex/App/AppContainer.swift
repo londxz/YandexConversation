@@ -38,7 +38,19 @@ final class AppContainer {
     private(set) lazy var microphonePermissionService: MicrophonePermissionService = DefaultMicrophonePermissionService()
     private(set) lazy var audioRecordingService: AudioRecordingService = DefaultAudioRecorderService()
     private(set) lazy var textToSpeechService: TextToSpeechService = DefaultTextToSpeechService()
-    private(set) lazy var apiClient = APIClient(config: config)
+    private(set) lazy var httpClient = HTTPClient(config: config)
+    private(set) lazy var deviceSessionStore: DeviceSessionStateStoring = KeychainDeviceSessionStore()
+    private(set) lazy var deviceSessionRemoteDataSource: DeviceSessionRemoteDataSource = DefaultDeviceSessionRemoteDataSource(
+        httpClient: httpClient
+    )
+    private(set) lazy var deviceSessionRepository: DeviceSessionRepository = DefaultDeviceSessionRepository(
+        store: deviceSessionStore,
+        remoteDataSource: deviceSessionRemoteDataSource
+    )
+    private(set) lazy var apiClient = APIClient(
+        httpClient: httpClient,
+        deviceSessionRepository: deviceSessionRepository
+    )
     private(set) lazy var speechRecognitionService: SpeechRecognitionService = RemoteSpeechRecognitionService(
         apiClient: apiClient
     )
@@ -131,5 +143,18 @@ final class AppContainer {
                 AppLogger.error("Failed to prepare runtime settings: \(error.localizedDescription)")
             }
         }
+
+        #if DEBUG
+        if config.eagerlyRegistersDeviceSession {
+            Task { [weak self] in
+                do {
+                    _ = try await self?.deviceSessionRepository.session()
+                    AppLogger.debug("Backend device session is ready")
+                } catch {
+                    AppLogger.error("Backend device session preparation failed")
+                }
+            }
+        }
+        #endif
     }
 }

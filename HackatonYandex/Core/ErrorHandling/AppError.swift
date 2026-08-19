@@ -12,6 +12,7 @@ enum AppError: Error, Equatable {
     case emptyResponse
     case decodingFailed
     case networkUnavailable
+    case secureStorageUnavailable
     case serverError(statusCode: Int)
     case apiError(code: String, message: String, requestID: String?)
     case speechUnavailable
