@@ -24,7 +24,6 @@ final class CoreDataConversationRepository: ConversationRepository {
         try await coreDataStack.perform { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Entity.conversation)
             request.sortDescriptors = [
-                NSSortDescriptor(key: "isPinned", ascending: false),
                 NSSortDescriptor(key: "updatedAt", ascending: false)
             ]
 
