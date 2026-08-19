@@ -61,6 +61,9 @@ final class AppContainer {
     private(set) lazy var fetchConversationMessagesUseCase = FetchConversationMessagesUseCase(
         repository: conversationRepository
     )
+    private(set) lazy var fetchConversationUseCase = FetchConversationUseCase(
+        repository: conversationRepository
+    )
     private(set) lazy var saveConversationUseCase = SaveConversationUseCase(
         repository: conversationRepository
     )
@@ -83,6 +86,18 @@ final class AppContainer {
         repository: phraseRepository
     )
     private(set) lazy var recordPhraseUsageUseCase = RecordPhraseUsageUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var fetchPhraseFoldersUseCase = FetchPhraseFoldersUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var createPhraseFolderUseCase = CreatePhraseFolderUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var savePhraseFolderUseCase = SavePhraseFolderUseCase(
+        repository: phraseRepository
+    )
+    private(set) lazy var deletePhraseFolderUseCase = DeletePhraseFolderUseCase(
         repository: phraseRepository
     )
     private(set) lazy var fetchSettingsUseCase = FetchSettingsUseCase(

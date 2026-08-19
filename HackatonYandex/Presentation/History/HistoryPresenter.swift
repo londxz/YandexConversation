@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 final class HistoryPresenter {
     private struct Record {
         var conversation: Conversation

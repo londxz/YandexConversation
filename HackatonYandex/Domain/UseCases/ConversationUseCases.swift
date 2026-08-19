@@ -23,6 +23,14 @@ struct FetchConversationMessagesUseCase {
     }
 }
 
+struct FetchConversationUseCase {
+    let repository: ConversationRepository
+
+    func execute(id: String) async throws -> Conversation? {
+        try await repository.fetchConversation(id: id)
+    }
+}
+
 struct SaveConversationUseCase {
     let repository: ConversationRepository
 

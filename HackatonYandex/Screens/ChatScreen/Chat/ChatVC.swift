@@ -2,7 +2,7 @@
 //  ChatVC.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import UIKit
@@ -13,7 +13,7 @@ class ChatVC: UIViewController {
     var chatComponentHeightConstraint: NSLayoutConstraint!
     let quickPhrasePanelHeight: CGFloat = 306
     var isQuickPhrasePanelVisible = false
-    private let container: AppContainer
+    let container: AppContainer
     
     private let topChatComponent = TopChatComponent()
     private let containerView = UIView()
@@ -28,7 +28,10 @@ class ChatVC: UIViewController {
         microphonePermissionService: container.microphonePermissionService,
         audioRecordingService: container.audioRecordingService,
         speechRecognitionService: container.speechRecognitionService,
+        textToSpeechService: container.textToSpeechService,
         fetchSettingsUseCase: container.fetchSettingsUseCase,
+        fetchConversationUseCase: container.fetchConversationUseCase,
+        fetchConversationMessagesUseCase: container.fetchConversationMessagesUseCase,
         saveConversationUseCase: container.saveConversationUseCase,
         addConversationMessageUseCase: container.addConversationMessageUseCase
     )
@@ -37,21 +40,19 @@ class ChatVC: UIViewController {
     var microphoneHint: MicrophoneOnHint?
     
     private var currentChildVC: UIViewController?
-    lazy var talkVC = TalkViewController(textToSpeechService: container.textToSpeechService)
+    lazy var talkVC = TalkViewController()
     lazy var listenVC = ListenViewController()
     
-    var microEnabledView: MicroEnabledView?
-    var isViewRotated = false
+    var largeTextDisplayViewController: LargeTextDisplayViewController?
     var currentConversationMode: ConversationMode = .talk
 
-    init(container: AppContainer = AppContainer()) {
+    init(container: AppContainer) {
         self.container = container
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        self.container = AppContainer()
-        super.init(coder: coder)
+        fatalError("init(coder:) has not been implemented")
     }
     
     override func viewDidLoad() {
@@ -189,34 +190,9 @@ class ChatVC: UIViewController {
         currentChildVC = newVC
     }
     
-    func dismissMicrophoneOverlayIfNeeded() {
-        guard let overlay = microEnabledView else { return }
-        
-        UIView.animate(withDuration: 0.3, animations: {
-            overlay.alpha = 0
-            overlay.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        }, completion: { _ in
-            overlay.removeFromSuperview()
-        })
-        
-        microEnabledView = nil
-    }
-    
-    func resetRotationIfNeeded() {
-        guard isViewRotated else { return }
-        
-        UIView.animate(withDuration: 0.3) {
-            self.view.transform = .identity
-        }
-        isViewRotated = false
-    }
-    
-    func toggleRotation() {
-        isViewRotated.toggle()
-        
-        UIView.animate(withDuration: 0.3) {
-            self.view.transform = self.isViewRotated ? CGAffineTransform(rotationAngle: .pi) : .identity
-        }
+    func dismissLargeTextDisplayIfNeeded() {
+        largeTextDisplayViewController?.dismissImmediately()
+        largeTextDisplayViewController = nil
     }
     
     @objc private func dismissKeyboard() {
@@ -228,7 +204,11 @@ class ChatVC: UIViewController {
         view.endEditing(true)
         hideQuickPhrasePanel(animated: true)
 
-        let historyVC = HistoryViewController(container: container)
+        let historyVC = HistoryViewController(container: container) { [weak self] conversationId in
+            self?.dismiss(animated: true) {
+                self?.presenter.didRequestResumeConversation(id: conversationId)
+            }
+        }
         let navigationController = UINavigationController(rootViewController: historyVC)
         navigationController.modalPresentationStyle = .fullScreen
         present(navigationController, animated: true)

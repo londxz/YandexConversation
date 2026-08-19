@@ -2,7 +2,7 @@
 //  ChatVC+Keyboard.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 02.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import Foundation

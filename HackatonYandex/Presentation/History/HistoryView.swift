@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 protocol HistoryView: AnyObject {
     func render(_ viewModel: HistoryViewModel)
     func presentHistoryError(_ message: String)

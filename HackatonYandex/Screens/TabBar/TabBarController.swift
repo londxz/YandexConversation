@@ -2,7 +2,7 @@
 //  TabBarController.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import UIKit
@@ -10,14 +10,13 @@ import UIKit
 class TabBarController: UITabBarController {
     private let container: AppContainer
 
-    init(container: AppContainer = AppContainer()) {
+    init(container: AppContainer) {
         self.container = container
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        self.container = AppContainer()
-        super.init(coder: coder)
+        fatalError("init(coder:) has not been implemented")
     }
 
     override func viewDidLoad() {

@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 final class HistoryDetailPresenter {
     private weak var view: HistoryDetailView?
     private let conversationId: String
@@ -55,6 +56,15 @@ final class HistoryDetailPresenter {
             text: makeTranscript(),
             fileName: makeFileName()
         )
+    }
+
+    func didRequestContinueConversation() {
+        guard !messages.isEmpty else {
+            view?.presentHistoryDetailError("В разговоре нет сообщений для продолжения.")
+            return
+        }
+
+        view?.continueConversation(id: conversationId)
     }
 
     private func loadMessages() {

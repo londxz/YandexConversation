@@ -1,15 +1,11 @@
 //
-//  StartTypingHint.swift
+//  MicrophoneOnHint.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import UIKit
-
-protocol MicrophoneOnHintDelegate: AnyObject {
-    func microphoneHintTapped()
-}
 
 final class MicrophoneOnHint: UIView {
     

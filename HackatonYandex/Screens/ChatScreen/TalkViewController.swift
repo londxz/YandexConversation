@@ -2,13 +2,16 @@
 //  TalkViewController.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import UIKit
 
+@MainActor
 protocol TalkViewControllerDelegate: AnyObject {
     func talkViewControllerDidAppearEmpty(_ viewController: TalkViewController)
+    func talkViewController(_ viewController: TalkViewController, didRequestLargeText text: String)
+    func talkViewController(_ viewController: TalkViewController, didRequestSpeak text: String)
 }
 
 class TalkViewController: UIViewController {
@@ -20,21 +23,18 @@ class TalkViewController: UIViewController {
         return formatter
     }()
 
-    private let textToSpeechService: TextToSpeechService
     private let scrollView = UIScrollView()
     private let stackView = UIStackView()
     private var hasMessages = false
     private var transcriptFontScale: CGFloat = 1
     private var transcriptLabels: [UILabel: CGFloat] = [:]
 
-    init(textToSpeechService: TextToSpeechService) {
-        self.textToSpeechService = textToSpeechService
+    init() {
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        self.textToSpeechService = DefaultTextToSpeechService()
-        super.init(coder: coder)
+        fatalError("init(coder:) has not been implemented")
     }
     
     override func viewDidLoad() {
@@ -50,8 +50,8 @@ class TalkViewController: UIViewController {
         delegate?.talkViewControllerDidAppearEmpty(self)
     }
 
-    func appendUserMessage(_ text: String) {
-        appendOutgoingMessage(text)
+    func appendUserMessage(_ text: String, createdAt: Date = Date()) {
+        appendOutgoingMessage(text, createdAt: createdAt)
     }
 
     func appendIncomingMessage(_ text: String, speakerLabel: String = "Говорящий 1") {
@@ -106,7 +106,7 @@ class TalkViewController: UIViewController {
         ])
     }
 
-    private func appendOutgoingMessage(_ text: String) {
+    private func appendOutgoingMessage(_ text: String, createdAt: Date) {
         hasMessages = true
 
         let rowView = UIView()
@@ -125,7 +125,8 @@ class TalkViewController: UIViewController {
 
         voiceButton.addAction(
             UIAction { [weak self] _ in
-                self?.textToSpeechService.speak(text)
+                guard let self else { return }
+                self.delegate?.talkViewController(self, didRequestSpeak: text)
             },
             for: .touchUpInside
         )
@@ -156,7 +157,7 @@ class TalkViewController: UIViewController {
         menuButton.translatesAutoresizingMaskIntoConstraints = false
 
         let timeLabel = UILabel()
-        timeLabel.text = Self.messageTimeFormatter.string(from: Date())
+        timeLabel.text = Self.messageTimeFormatter.string(from: createdAt)
         timeLabel.textColor = UIColor.black.withAlphaComponent(0.35)
         timeLabel.font = UIFont(name: "YSDisplay-Medium", size: 14)
             ?? .systemFont(ofSize: 14, weight: .medium)
@@ -260,11 +261,20 @@ class TalkViewController: UIViewController {
     }
 
     private func makeOutgoingMessageMenu(_ text: String) -> UIMenu {
+        let largeTextAction = UIAction(
+            title: "Показать крупно",
+            image: UIImage(systemName: "textformat.size.larger")
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.delegate?.talkViewController(self, didRequestLargeText: text)
+        }
+
         let speakAction = UIAction(
             title: "Озвучить",
             image: UIImage(named: "to_voice")
         ) { [weak self] _ in
-            self?.textToSpeechService.speak(text)
+            guard let self else { return }
+            self.delegate?.talkViewController(self, didRequestSpeak: text)
         }
 
         let copyAction = UIAction(
@@ -274,7 +284,7 @@ class TalkViewController: UIViewController {
             UIPasteboard.general.string = text
         }
 
-        return UIMenu(children: [speakAction, copyAction])
+        return UIMenu(children: [largeTextAction, speakAction, copyAction])
     }
 
     private func scrollToBottom() {

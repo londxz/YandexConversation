@@ -1,0 +1,1242 @@
+openapi: 3.1.0
+info:
+  title: Razgovor API
+  version: 1.0.0
+  description: |
+    Versioned production contract for the Razgovor iOS client and Go backend.
+    Local data remains the client's source of truth. Raw audio and transcript text
+    must never be written to production logs.
+servers:
+  - url: https://api.razgovor.app
+    description: Production
+  - url: https://staging-api.razgovor.app
+    description: Staging
+tags:
+  - name: System
+  - name: Devices
+  - name: Conversations
+  - name: Phrases
+  - name: Settings
+  - name: Speech
+  - name: Sync
+paths:
+  /v1/health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Service is ready.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /v1/devices/register:
+    post:
+      tags: [Devices]
+      operationId: registerDevice
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDeviceRequest"
+      responses:
+        "201":
+          description: Anonymous device session created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSession"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/devices/refresh:
+    post:
+      tags: [Devices]
+      operationId: refreshDeviceSession
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshDeviceSessionRequest"
+      responses:
+        "200":
+          description: Access and refresh tokens rotated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSession"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/devices/{device_id}:
+    delete:
+      tags: [Devices]
+      operationId: deleteDeviceData
+      description: Permanently deletes the device session and all synced user data owned by it.
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Server data deleted.
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations:
+    get:
+      tags: [Conversations]
+      operationId: listConversations
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Conversations ordered by most recently updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationPage"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Conversations]
+      operationId: createConversation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Conversation created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{conversation_id}:
+    parameters:
+      - $ref: "#/components/parameters/ConversationID"
+    get:
+      tags: [Conversations]
+      operationId: getConversation
+      responses:
+        "200":
+          description: Conversation found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [Conversations]
+      operationId: updateConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateConversationRequest"
+      responses:
+        "200":
+          description: Conversation updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Conversations]
+      operationId: deleteConversation
+      responses:
+        "204":
+          description: Conversation and its messages deleted.
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{conversation_id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ConversationID"
+    get:
+      tags: [Conversations]
+      operationId: listConversationMessages
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/MessageLimit"
+      responses:
+        "200":
+          description: Messages ordered from oldest to newest within the page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagePage"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Conversations]
+      operationId: createConversationMessage
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMessageRequest"
+      responses:
+        "201":
+          description: Message created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationMessage"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{conversation_id}/messages/{message_id}:
+    parameters:
+      - $ref: "#/components/parameters/ConversationID"
+      - $ref: "#/components/parameters/MessageID"
+    patch:
+      tags: [Conversations]
+      operationId: updateConversationMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMessageRequest"
+      responses:
+        "200":
+          description: Message updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationMessage"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Conversations]
+      operationId: deleteConversationMessage
+      responses:
+        "204":
+          description: Message deleted.
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/phrase-folders:
+    get:
+      tags: [Phrases]
+      operationId: listPhraseFolders
+      responses:
+        "200":
+          description: All phrase folders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PhraseFolder"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Phrases]
+      operationId: createPhraseFolder
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePhraseFolderRequest"
+      responses:
+        "201":
+          description: Folder created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhraseFolder"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/phrase-folders/{folder_id}:
+    parameters:
+      - $ref: "#/components/parameters/FolderID"
+    patch:
+      tags: [Phrases]
+      operationId: updatePhraseFolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                sort_order:
+                  type: integer
+      responses:
+        "200":
+          description: Folder updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhraseFolder"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Phrases]
+      operationId: deletePhraseFolder
+      description: Deletes the folder and leaves its phrases unassigned.
+      responses:
+        "204":
+          description: Folder deleted.
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/phrases:
+    get:
+      tags: [Phrases]
+      operationId: listPhrases
+      parameters:
+        - name: folder_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: favorite_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Phrases matching the filter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhrasePage"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Phrases]
+      operationId: createPhrase
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePhraseRequest"
+      responses:
+        "201":
+          description: Phrase created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Phrase"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/phrases/{phrase_id}:
+    parameters:
+      - $ref: "#/components/parameters/PhraseID"
+    get:
+      tags: [Phrases]
+      operationId: getPhrase
+      responses:
+        "200":
+          description: Phrase found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Phrase"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [Phrases]
+      operationId: updatePhrase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePhraseRequest"
+      responses:
+        "200":
+          description: Phrase updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Phrase"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Phrases]
+      operationId: deletePhrase
+      responses:
+        "204":
+          description: Phrase deleted.
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/phrases/{phrase_id}/use:
+    post:
+      tags: [Phrases]
+      operationId: recordPhraseUse
+      parameters:
+        - $ref: "#/components/parameters/PhraseID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Usage counter updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Phrase"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/settings:
+    get:
+      tags: [Settings]
+      operationId: getSettings
+      responses:
+        "200":
+          description: Synced user settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+        default:
+          $ref: "#/components/responses/Error"
+    put:
+      tags: [Settings]
+      operationId: replaceSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppSettings"
+      responses:
+        "200":
+          description: Settings saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/speech/transcribe:
+    post:
+      tags: [Speech]
+      operationId: transcribeSpeech
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, language]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                language:
+                  type: string
+                  example: ru-RU
+                conversation_id:
+                  type: [string, "null"]
+                  format: uuid
+      responses:
+        "200":
+          description: Final transcription result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptionResult"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/speech/stream:
+    get:
+      tags: [Speech]
+      operationId: openSpeechStream
+      description: Upgrade to a WebSocket connection. Binary audio frames are preferred after the JSON start event.
+      responses:
+        "101":
+          description: WebSocket protocol switched.
+        default:
+          $ref: "#/components/responses/Error"
+      x-websocket-events:
+        client:
+          - $ref: "#/components/schemas/SpeechStreamStart"
+          - $ref: "#/components/schemas/SpeechStreamStop"
+        server:
+          - $ref: "#/components/schemas/SpeechPartialEvent"
+          - $ref: "#/components/schemas/SpeechFinalEvent"
+          - $ref: "#/components/schemas/SpeechErrorEvent"
+  /v1/sync/push:
+    post:
+      tags: [Sync]
+      operationId: pushSyncChanges
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncPushRequest"
+      responses:
+        "200":
+          description: Server decisions for every client mutation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncPushResponse"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/sync/pull:
+    post:
+      tags: [Sync]
+      operationId: pullSyncChanges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncPullRequest"
+      responses:
+        "200":
+          description: Changes after the supplied sync cursor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncPullResponse"
+        default:
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RequestID:
+      name: X-Request-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 100
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 100
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    MessageLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
+    ConversationID:
+      name: conversation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MessageID:
+      name: message_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FolderID:
+      name: folder_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PhraseID:
+      name: phrase_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  headers:
+    RequestID:
+      description: Identifier used to correlate client errors with backend logs.
+      schema:
+        type: string
+  responses:
+    Error:
+      description: Stable machine-readable error.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    Health:
+      type: object
+      required: [status, version, time]
+      properties:
+        status:
+          type: string
+          const: ok
+        version:
+          type: string
+        time:
+          type: string
+          format: date-time
+    RegisterDeviceRequest:
+      type: object
+      additionalProperties: false
+      required: [platform, app_version, locale]
+      properties:
+        platform:
+          type: string
+          const: ios
+        app_version:
+          type: string
+        locale:
+          type: string
+    RefreshDeviceSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [device_id, refresh_token]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        refresh_token:
+          type: string
+    DeviceSession:
+      type: object
+      required: [device_id, access_token, refresh_token, expires_at]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    Conversation:
+      type: object
+      additionalProperties: false
+      required: [id, title, mode, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        mode:
+          type: string
+          enum: [talk, listen]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateConversationRequest:
+      type: object
+      additionalProperties: false
+      required: [id, title, mode, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        mode:
+          type: string
+          enum: [talk, listen]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpdateConversationRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        mode:
+          type: string
+          enum: [talk, listen]
+        updated_at:
+          type: string
+          format: date-time
+    ConversationMessage:
+      type: object
+      additionalProperties: false
+      required: [id, conversation_id, text, source, is_final, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        text:
+          type: string
+          maxLength: 20000
+        source:
+          type: string
+          enum: [user_typed, user_voice, external_speech, quick_phrase, system]
+        speaker_id:
+          type: [string, "null"]
+        speaker_label:
+          type: [string, "null"]
+          maxLength: 100
+        is_final:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        audio_duration_ms:
+          type: [integer, "null"]
+          minimum: 0
+    CreateMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [id, text, source, is_final, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        source:
+          type: string
+          enum: [user_typed, user_voice, external_speech, quick_phrase, system]
+        speaker_id:
+          type: [string, "null"]
+        speaker_label:
+          type: [string, "null"]
+          maxLength: 100
+        is_final:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        audio_duration_ms:
+          type: [integer, "null"]
+          minimum: 0
+    UpdateMessageRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        text:
+          type: string
+          maxLength: 20000
+        speaker_id:
+          type: [string, "null"]
+        speaker_label:
+          type: [string, "null"]
+        is_final:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+    PhraseFolder:
+      type: object
+      additionalProperties: false
+      required: [id, title, sort_order, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        sort_order:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+    CreatePhraseFolderRequest:
+      type: object
+      additionalProperties: false
+      required: [id, title, sort_order]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        sort_order:
+          type: integer
+    Phrase:
+      type: object
+      additionalProperties: false
+      required: [id, text, is_favorite, sort_order, usage_count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        folder_id:
+          type: [string, "null"]
+          format: uuid
+        text:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        category:
+          type: [string, "null"]
+          maxLength: 100
+        is_favorite:
+          type: boolean
+        sort_order:
+          type: integer
+        usage_count:
+          type: integer
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreatePhraseRequest:
+      type: object
+      additionalProperties: false
+      required: [id, text, is_favorite, sort_order, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        folder_id:
+          type: [string, "null"]
+          format: uuid
+        text:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        category:
+          type: [string, "null"]
+          maxLength: 100
+        is_favorite:
+          type: boolean
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpdatePhraseRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        folder_id:
+          type: [string, "null"]
+          format: uuid
+        text:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        category:
+          type: [string, "null"]
+        is_favorite:
+          type: boolean
+        sort_order:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+    AppSettings:
+      type: object
+      additionalProperties: false
+      required:
+        - recognition_language
+        - tts_language
+        - speech_rate
+        - transcript_font_scale
+        - auto_start_microphone
+        - save_conversations_by_default
+        - sync_enabled
+        - privacy_mode
+        - updated_at
+      properties:
+        recognition_language:
+          type: string
+        tts_language:
+          type: string
+        tts_voice_identifier:
+          type: [string, "null"]
+        speech_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        transcript_font_scale:
+          type: number
+          minimum: 0.8
+          maximum: 2
+        auto_start_microphone:
+          type: boolean
+        save_conversations_by_default:
+          type: boolean
+        sync_enabled:
+          type: boolean
+        privacy_mode:
+          type: string
+          enum: [standard, local_only]
+        updated_at:
+          type: string
+          format: date-time
+    TranscriptionResult:
+      type: object
+      additionalProperties: false
+      required: [text, language, duration_ms, confidence]
+      properties:
+        text:
+          type: string
+        language:
+          type: string
+        duration_ms:
+          type: integer
+          minimum: 0
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+    Speaker:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+    SpeechStreamStart:
+      type: object
+      required: [type, conversation_id, mode, language, audio]
+      properties:
+        type:
+          type: string
+          const: start
+        conversation_id:
+          type: string
+          format: uuid
+        mode:
+          type: string
+          enum: [talk, listen]
+        language:
+          type: string
+        audio:
+          type: object
+          required: [format, sample_rate, channels]
+          properties:
+            format:
+              type: string
+              const: pcm16
+            sample_rate:
+              type: integer
+              const: 16000
+            channels:
+              type: integer
+              const: 1
+    SpeechStreamStop:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: stop
+    SpeechPartialEvent:
+      type: object
+      required: [type, sequence, text, speaker]
+      properties:
+        type:
+          type: string
+          const: partial
+        sequence:
+          type: integer
+          minimum: 0
+        text:
+          type: string
+        speaker:
+          $ref: "#/components/schemas/Speaker"
+    SpeechFinalEvent:
+      type: object
+      required: [type, message_id, sequence, text, speaker, confidence, started_at, ended_at]
+      properties:
+        type:
+          type: string
+          const: final
+        message_id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          minimum: 0
+        text:
+          type: string
+        speaker:
+          $ref: "#/components/schemas/Speaker"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+    SpeechErrorEvent:
+      type: object
+      required: [type, code, message, request_id]
+      properties:
+        type:
+          type: string
+          const: error
+        code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+    SyncMutation:
+      type: object
+      additionalProperties: false
+      required: [mutation_id, entity_type, entity_id, operation, client_updated_at]
+      properties:
+        mutation_id:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+          enum: [conversation, message, phrase, phrase_folder, settings]
+        entity_id:
+          type: string
+        operation:
+          type: string
+          enum: [upsert, delete]
+        payload:
+          type: [object, "null"]
+        client_updated_at:
+          type: string
+          format: date-time
+    SyncPushRequest:
+      type: object
+      additionalProperties: false
+      required: [device_id, mutations]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        mutations:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/SyncMutation"
+    SyncMutationResult:
+      type: object
+      required: [mutation_id, status]
+      properties:
+        mutation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [applied, rejected, conflict]
+        server_updated_at:
+          type: [string, "null"]
+          format: date-time
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/ErrorPayload"
+            - type: "null"
+    SyncPushResponse:
+      type: object
+      required: [results, next_cursor]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncMutationResult"
+        next_cursor:
+          type: string
+    SyncPullRequest:
+      type: object
+      additionalProperties: false
+      required: [device_id]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        cursor:
+          type: [string, "null"]
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 200
+    SyncChange:
+      type: object
+      required: [entity_type, entity_id, operation, server_updated_at]
+      properties:
+        entity_type:
+          type: string
+          enum: [conversation, message, phrase, phrase_folder, settings]
+        entity_id:
+          type: string
+        operation:
+          type: string
+          enum: [upsert, delete]
+        payload:
+          type: [object, "null"]
+        server_updated_at:
+          type: string
+          format: date-time
+    SyncPullResponse:
+      type: object
+      required: [changes, next_cursor, has_more]
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncChange"
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+    ConversationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+        next_cursor:
+          type: [string, "null"]
+    MessagePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationMessage"
+        next_cursor:
+          type: [string, "null"]
+    PhrasePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Phrase"
+        next_cursor:
+          type: [string, "null"]
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorPayload"
+    ErrorPayload:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          pattern: "^[a-z0-9_]+$"
+        message:
+          type: string
+        request_id:
+          type: string
+security:
+  - bearerAuth: []

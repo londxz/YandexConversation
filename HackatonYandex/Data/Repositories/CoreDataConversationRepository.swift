@@ -31,6 +31,16 @@ final class CoreDataConversationRepository: ConversationRepository {
         }
     }
 
+    func fetchConversation(id: String) async throws -> Conversation? {
+        try await coreDataStack.perform { context in
+            try self.fetchObject(
+                entityName: Entity.conversation,
+                id: id,
+                context: context
+            ).map(Self.mapConversation)
+        }
+    }
+
     func fetchMessages(conversationId: String) async throws -> [ConversationMessage] {
         try await coreDataStack.perform { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: Entity.message)

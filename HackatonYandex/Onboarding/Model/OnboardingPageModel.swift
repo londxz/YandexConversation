@@ -2,7 +2,7 @@
 //  OnboardingPageModel.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 struct OnboardingPageModel {

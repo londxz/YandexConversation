@@ -21,7 +21,7 @@
 	</dict>
     
     <key>NSMicrophoneUsageDescription</key>
-    <string>Нам нужен доступ к микрофону для записи голосовых сообщений.</string>
+    <string>Доступ к микрофону нужен, чтобы показывать речь собеседника текстом.</string>
 
 	<key>UIAppFonts</key>
 	<array>

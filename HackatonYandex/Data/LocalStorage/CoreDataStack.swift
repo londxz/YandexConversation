@@ -151,6 +151,16 @@ private extension CoreDataStack {
         ]
         phraseEntity.uniquenessConstraints = [["id"]]
 
+        let phraseFolderEntity = NSEntityDescription()
+        phraseFolderEntity.name = "CDPhraseFolder"
+        phraseFolderEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        phraseFolderEntity.properties = [
+            attribute("id", type: .stringAttributeType),
+            attribute("title", type: .stringAttributeType),
+            attribute("sortOrder", type: .integer64AttributeType)
+        ]
+        phraseFolderEntity.uniquenessConstraints = [["id"]]
+
         let metadataEntity = NSEntityDescription()
         metadataEntity.name = "CDLocalMetadata"
         metadataEntity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
@@ -183,6 +193,7 @@ private extension CoreDataStack {
             conversationEntity,
             messageEntity,
             phraseEntity,
+            phraseFolderEntity,
             metadataEntity,
             settingsEntity
         ]

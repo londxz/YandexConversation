@@ -7,6 +7,7 @@
 
 import UIKit
 
+@MainActor
 protocol QuickPhrasePanelViewInput: AnyObject {
     func render(_ viewModel: QuickPhrasePanelViewModel)
 }
@@ -27,6 +28,7 @@ struct QuickPhrasePanelViewModel {
     let state: State
 }
 
+@MainActor
 final class QuickPhrasePanelPresenter {
     private weak var view: QuickPhrasePanelViewInput?
     private let fetchPhrasesUseCase: FetchPhrasesUseCase

@@ -11,6 +11,7 @@ import Foundation
 final class CoreDataPhraseRepository: PhraseRepository {
     private enum Entity {
         static let phrase = "CDPhrase"
+        static let folder = "CDPhraseFolder"
         static let metadata = "CDLocalMetadata"
     }
 
@@ -74,10 +75,46 @@ final class CoreDataPhraseRepository: PhraseRepository {
         }
     }
 
+    func fetchPhraseFolders() async throws -> [PhraseFolder] {
+        try await coreDataStack.perform { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: Entity.folder)
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "sortOrder", ascending: true),
+                NSSortDescriptor(key: "title", ascending: true)
+            ]
+            return try context.fetch(request).map(Self.mapFolder)
+        }
+    }
+
+    func savePhraseFolder(_ folder: PhraseFolder) async throws {
+        try await coreDataStack.perform { context in
+            let object = try self.fetchFolderObject(id: folder.id, context: context)
+                ?? self.makeFolderObject(context: context)
+            object.setValue(folder.id, forKey: "id")
+            object.setValue(folder.title, forKey: "title")
+            object.setValue(NSNumber(value: folder.sortOrder), forKey: "sortOrder")
+        }
+    }
+
     func deletePhrase(id: String) async throws {
         try await coreDataStack.perform { context in
             if let object = try self.fetchObject(id: id, context: context) {
                 context.delete(object)
+            }
+        }
+    }
+
+    func deletePhraseFolder(id: String) async throws {
+        try await coreDataStack.perform { context in
+            let phraseRequest = NSFetchRequest<NSManagedObject>(entityName: Entity.phrase)
+            phraseRequest.predicate = NSPredicate(format: "folderId == %@", id)
+            for phrase in try context.fetch(phraseRequest) {
+                phrase.setValue(nil, forKey: "folderId")
+                phrase.setValue(Date(), forKey: "updatedAt")
+            }
+
+            if let folder = try self.fetchFolderObject(id: id, context: context) {
+                context.delete(folder)
             }
         }
     }
@@ -109,6 +146,23 @@ private extension CoreDataPhraseRepository {
             throw LocalStorageError.entityNotFound(Entity.phrase)
         }
 
+        return NSManagedObject(entity: entity, insertInto: context)
+    }
+
+    func fetchFolderObject(
+        id: String,
+        context: NSManagedObjectContext
+    ) throws -> NSManagedObject? {
+        let request = NSFetchRequest<NSManagedObject>(entityName: Entity.folder)
+        request.predicate = NSPredicate(format: "id == %@", id)
+        request.fetchLimit = 1
+        return try context.fetch(request).first
+    }
+
+    func makeFolderObject(context: NSManagedObjectContext) throws -> NSManagedObject {
+        guard let entity = NSEntityDescription.entity(forEntityName: Entity.folder, in: context) else {
+            throw LocalStorageError.entityNotFound(Entity.folder)
+        }
         return NSManagedObject(entity: entity, insertInto: context)
     }
 
@@ -188,6 +242,14 @@ private extension CoreDataPhraseRepository {
             createdAt: try dateValue("createdAt", from: object),
             updatedAt: try dateValue("updatedAt", from: object),
             syncState: syncState
+        )
+    }
+
+    static func mapFolder(_ object: NSManagedObject) throws -> PhraseFolder {
+        PhraseFolder(
+            id: try stringValue("id", from: object),
+            title: try stringValue("title", from: object),
+            sortOrder: intValue("sortOrder", from: object)
         )
     }
 

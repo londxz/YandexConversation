@@ -7,171 +7,6 @@
 
 import UIKit
 
-protocol PhrasesView: AnyObject {
-    func render(_ viewModel: PhrasesViewModel)
-}
-
-struct PhrasesViewModel {
-    struct Item {
-        let id: String
-        let title: String
-        let isPinned: Bool
-    }
-
-    enum State {
-        case loading
-        case empty
-        case content([Item])
-        case error(String)
-    }
-
-    let title: String
-    let state: State
-}
-
-final class PhrasesPresenter {
-    private weak var view: PhrasesView?
-    private let fetchPhrasesUseCase: FetchPhrasesUseCase
-    private let createPhraseUseCase: CreatePhraseUseCase
-    private let savePhraseUseCase: SavePhraseUseCase
-    private let deletePhraseUseCase: DeletePhraseUseCase
-    private var phrases: [Phrase] = []
-
-    init(
-        view: PhrasesView,
-        fetchPhrasesUseCase: FetchPhrasesUseCase,
-        createPhraseUseCase: CreatePhraseUseCase,
-        savePhraseUseCase: SavePhraseUseCase,
-        deletePhraseUseCase: DeletePhraseUseCase
-    ) {
-        self.view = view
-        self.fetchPhrasesUseCase = fetchPhrasesUseCase
-        self.createPhraseUseCase = createPhraseUseCase
-        self.savePhraseUseCase = savePhraseUseCase
-        self.deletePhraseUseCase = deletePhraseUseCase
-    }
-
-    func viewDidLoad() {
-        loadPhrases()
-    }
-
-    func didRequestRefresh() {
-        loadPhrases()
-    }
-
-    func didCreatePhrase(text: String) {
-        let normalizedText = normalize(text)
-        guard !normalizedText.isEmpty else { return }
-
-        Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                _ = try await createPhraseUseCase.execute(text: normalizedText)
-                await MainActor.run {
-                    self.loadPhrases()
-                }
-            } catch {
-                AppLogger.error("Failed to create phrase: \(error.localizedDescription)")
-                await renderError("Не удалось добавить фразу.")
-            }
-        }
-    }
-
-    func didUpdatePhrase(id: String, text: String) {
-        let normalizedText = normalize(text)
-        guard !normalizedText.isEmpty else { return }
-        guard var phrase = phrases.first(where: { $0.id == id }) else { return }
-
-        phrase.text = normalizedText
-        phrase.updatedAt = Date()
-
-        save(phrase, failureMessage: "Не удалось изменить фразу.")
-    }
-
-    func didTogglePin(id: String) {
-        guard var phrase = phrases.first(where: { $0.id == id }) else { return }
-
-        phrase.isFavorite.toggle()
-        phrase.updatedAt = Date()
-
-        save(phrase, failureMessage: "Не удалось обновить закрепление.")
-    }
-
-    func didDeletePhrase(id: String) {
-        Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                try await deletePhraseUseCase.execute(id: id)
-                await MainActor.run {
-                    self.loadPhrases()
-                }
-            } catch {
-                AppLogger.error("Failed to delete phrase: \(error.localizedDescription)")
-                await renderError("Не удалось удалить фразу.")
-            }
-        }
-    }
-
-    private func loadPhrases() {
-        view?.render(PhrasesViewModel(title: "Фразы", state: .loading))
-
-        Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                let phrases = try await fetchPhrasesUseCase.execute()
-                let items = phrases.map {
-                    PhrasesViewModel.Item(
-                        id: $0.id,
-                        title: $0.text,
-                        isPinned: $0.isFavorite
-                    )
-                }
-
-                await MainActor.run {
-                    self.phrases = phrases
-                    self.view?.render(
-                        PhrasesViewModel(
-                            title: "Фразы",
-                            state: items.isEmpty ? .empty : .content(items)
-                        )
-                    )
-                }
-            } catch {
-                AppLogger.error("Failed to load phrases: \(error.localizedDescription)")
-                await renderError("Не удалось загрузить фразы.")
-            }
-        }
-    }
-
-    private func save(_ phrase: Phrase, failureMessage: String) {
-        Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                try await savePhraseUseCase.execute(phrase)
-                await MainActor.run {
-                    self.loadPhrases()
-                }
-            } catch {
-                AppLogger.error("Failed to save phrase: \(error.localizedDescription)")
-                await renderError(failureMessage)
-            }
-        }
-    }
-
-    @MainActor
-    private func renderError(_ message: String) {
-        view?.render(PhrasesViewModel(title: "Фразы", state: .error(message)))
-    }
-
-    private func normalize(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
 final class PhrasesViewController: UIViewController {
     private let container: AppContainer
     private lazy var presenter = PhrasesPresenter(
@@ -179,19 +14,26 @@ final class PhrasesViewController: UIViewController {
         fetchPhrasesUseCase: container.fetchPhrasesUseCase,
         createPhraseUseCase: container.createPhraseUseCase,
         savePhraseUseCase: container.savePhraseUseCase,
-        deletePhraseUseCase: container.deletePhraseUseCase
+        deletePhraseUseCase: container.deletePhraseUseCase,
+        fetchPhraseFoldersUseCase: container.fetchPhraseFoldersUseCase,
+        createPhraseFolderUseCase: container.createPhraseFolderUseCase,
+        savePhraseFolderUseCase: container.savePhraseFolderUseCase,
+        deletePhraseFolderUseCase: container.deletePhraseFolderUseCase
     )
 
     private var items: [PhrasesViewModel.Item] = []
+    private var folders: [PhrasesViewModel.FolderItem] = []
     private let headerView = UIView()
     private let backButton = UIButton(type: .system)
     private let titleLabel = UILabel()
+    private let searchBar = UISearchBar()
+    private let folderButton = UIButton(type: .system)
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let addButton = UIButton(type: .system)
     private let stateLabel = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
-    private var phraseDisplayOverlay: PhraseDisplayOverlayView?
-    private var isPhraseDisplayRotated = false
+    private var largeTextDisplayViewController: LargeTextDisplayViewController?
+    private var hasAppeared = false
 
     init(container: AppContainer) {
         self.container = container
@@ -199,8 +41,7 @@ final class PhrasesViewController: UIViewController {
     }
 
     required init?(coder: NSCoder) {
-        self.container = AppContainer()
-        super.init(coder: coder)
+        fatalError("init(coder:) has not been implemented")
     }
 
     override func viewDidLoad() {
@@ -209,22 +50,63 @@ final class PhrasesViewController: UIViewController {
         presenter.viewDidLoad()
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        presenter.didRequestRefresh()
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if hasAppeared {
+            presenter.didRequestRefresh()
+        } else {
+            hasAppeared = true
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        dismissPhraseOverlay(animated: false)
+        largeTextDisplayViewController?.dismissImmediately()
+        largeTextDisplayViewController = nil
     }
 
     private func setupView() {
         view.backgroundColor = .backgroundYandex
         setupHeader()
+        setupPhraseControls()
         setupAddButton()
         setupTableView()
         setupStateViews()
+    }
+
+    private func setupPhraseControls() {
+        searchBar.placeholder = "Поиск"
+        searchBar.searchBarStyle = .minimal
+        searchBar.delegate = self
+        searchBar.accessibilityLabel = "Поиск по заготовленным фразам"
+        searchBar.translatesAutoresizingMaskIntoConstraints = false
+
+        var configuration = UIButton.Configuration.gray()
+        configuration.image = UIImage(systemName: "folder")
+        configuration.imagePadding = 8
+        configuration.title = "Все фразы"
+        configuration.baseForegroundColor = .label
+        configuration.cornerStyle = .small
+        folderButton.configuration = configuration
+        folderButton.contentHorizontalAlignment = .leading
+        folderButton.showsMenuAsPrimaryAction = true
+        folderButton.accessibilityLabel = "Выбрать папку"
+        folderButton.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(searchBar)
+        view.addSubview(folderButton)
+
+        NSLayoutConstraint.activate([
+            searchBar.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            searchBar.heightAnchor.constraint(equalToConstant: 52),
+
+            folderButton.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 2),
+            folderButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            folderButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            folderButton.heightAnchor.constraint(equalToConstant: 44)
+        ])
     }
 
     private func setupHeader() {
@@ -304,7 +186,7 @@ final class PhrasesViewController: UIViewController {
         view.addSubview(tableView)
 
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            tableView.topAnchor.constraint(equalTo: folderButton.bottomAnchor, constant: 4),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: addButton.topAnchor, constant: -8)
@@ -373,44 +255,15 @@ final class PhrasesViewController: UIViewController {
     }
 
     private func showPhrase(_ text: String) {
-        resetPhraseDisplayRotationIfNeeded(animated: false)
-        phraseDisplayOverlay?.removeFromSuperview()
+        largeTextDisplayViewController?.dismissImmediately()
 
-        let overlay = PhraseDisplayOverlayView(
-            text: text,
-            textToSpeechService: container.textToSpeechService
-        )
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.alpha = 0
-        overlay.transform = CGAffineTransform(scaleX: 1.04, y: 1.04)
-        overlay.onDismiss = { [weak self] in
-            self?.phraseDisplayOverlay = nil
-            self?.resetPhraseDisplayRotationIfNeeded(animated: true)
+        let displayViewController = LargeTextDisplayViewController(text: text, container: container)
+        displayViewController.onDismiss = { [weak self, weak displayViewController] in
+            guard self?.largeTextDisplayViewController === displayViewController else { return }
+            self?.largeTextDisplayViewController = nil
         }
-        overlay.onRotate = { [weak self] in
-            self?.togglePhraseDisplayRotation()
-        }
-
-        view.addSubview(overlay)
-        phraseDisplayOverlay = overlay
-
-        NSLayoutConstraint.activate([
-            overlay.topAnchor.constraint(equalTo: view.topAnchor),
-            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        ])
-
-        UIView.animate(
-            withDuration: 0.28,
-            delay: 0,
-            usingSpringWithDamping: 0.88,
-            initialSpringVelocity: 0.3,
-            options: [.curveEaseInOut]
-        ) {
-            overlay.alpha = 1
-            overlay.transform = .identity
-        }
+        largeTextDisplayViewController = displayViewController
+        displayViewController.attach(to: self)
     }
 
     private func sharePhrase(_ text: String, sourceView: UIView) {
@@ -446,60 +299,147 @@ final class PhrasesViewController: UIViewController {
         present(alert, animated: true)
     }
 
-    private func dismissPhraseOverlay(animated: Bool) {
-        guard let overlay = phraseDisplayOverlay else {
-            resetPhraseDisplayRotationIfNeeded(animated: animated)
+    private func makeFolderMenu(selectedTitle: String) -> UIMenu {
+        let allAction = UIAction(
+            title: "Все фразы",
+            image: UIImage(systemName: "tray.full"),
+            state: selectedTitle == "Все фразы" ? .on : .off
+        ) { [weak self] _ in
+            self?.presenter.didSelectFolder(id: nil)
+        }
+        let folderActions = folders.map { folder in
+            UIAction(
+                title: folder.title,
+                image: UIImage(systemName: "folder"),
+                state: folder.isSelected ? .on : .off
+            ) { [weak self] _ in
+                self?.presenter.didSelectFolder(id: folder.id)
+            }
+        }
+        let createAction = UIAction(
+            title: "Новая папка",
+            image: UIImage(systemName: "folder.badge.plus")
+        ) { [weak self] _ in
+            self?.presentFolderEditor(title: "Новая папка", initialTitle: nil) { title in
+                self?.presenter.didCreateFolder(title: title)
+            }
+        }
+        let manageAction = UIAction(
+            title: "Управлять папками",
+            image: UIImage(systemName: "folder.badge.gearshape")
+        ) { [weak self] _ in
+            self?.presentFolderManager()
+        }
+
+        return UIMenu(children: [
+            UIMenu(options: .displayInline, children: [allAction] + folderActions),
+            UIMenu(options: .displayInline, children: [createAction, manageAction])
+        ])
+    }
+
+    private func makeMoveMenu(for item: PhrasesViewModel.Item) -> UIMenu {
+        let withoutFolder = UIAction(
+            title: "Без папки",
+            image: UIImage(systemName: "tray"),
+            state: item.folderId == nil ? .on : .off
+        ) { [weak self] _ in
+            self?.presenter.didMovePhrase(id: item.id, toFolderId: nil)
+        }
+        let folderActions = folders.map { folder in
+            UIAction(
+                title: folder.title,
+                image: UIImage(systemName: "folder"),
+                state: item.folderId == folder.id ? .on : .off
+            ) { [weak self] _ in
+                self?.presenter.didMovePhrase(id: item.id, toFolderId: folder.id)
+            }
+        }
+        return UIMenu(
+            title: "Переместить в папку",
+            image: UIImage(systemName: "folder"),
+            children: [withoutFolder] + folderActions
+        )
+    }
+
+    private func presentFolderEditor(
+        title: String,
+        initialTitle: String?,
+        onSave: @escaping (String) -> Void
+    ) {
+        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.text = initialTitle
+            textField.placeholder = "Название папки"
+            textField.clearButtonMode = .whileEditing
+            textField.returnKeyType = .done
+        }
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Сохранить", style: .default) { _ in
+            onSave(alert.textFields?.first?.text ?? "")
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentFolderManager() {
+        guard !folders.isEmpty else {
+            presentFolderEditor(title: "Новая папка", initialTitle: nil) { [weak self] title in
+                self?.presenter.didCreateFolder(title: title)
+            }
             return
         }
 
-        let animations = {
-            overlay.alpha = 0
-            overlay.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
+        let sheet = UIAlertController(title: "Папки", message: nil, preferredStyle: .actionSheet)
+        for folder in folders {
+            sheet.addAction(UIAlertAction(title: folder.title, style: .default) { [weak self] _ in
+                self?.presentFolderActions(folder)
+            })
         }
-
-        let completion: (Bool) -> Void = { [weak self] _ in
-            overlay.removeFromSuperview()
-            self?.phraseDisplayOverlay = nil
-            self?.resetPhraseDisplayRotationIfNeeded(animated: animated)
-        }
-
-        if animated {
-            UIView.animate(
-                withDuration: 0.2,
-                delay: 0,
-                options: [.curveEaseInOut],
-                animations: animations,
-                completion: completion
-            )
-        } else {
-            animations()
-            completion(true)
-        }
+        sheet.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = folderButton
+        sheet.popoverPresentationController?.sourceRect = folderButton.bounds
+        present(sheet, animated: true)
     }
 
-    private func togglePhraseDisplayRotation() {
-        isPhraseDisplayRotated.toggle()
-
-        UIView.animate(withDuration: 0.3) {
-            self.view.transform = self.isPhraseDisplayRotated
-                ? CGAffineTransform(rotationAngle: .pi)
-                : .identity
-        }
+    private func presentFolderActions(_ folder: PhrasesViewModel.FolderItem) {
+        let sheet = UIAlertController(title: folder.title, message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Переименовать", style: .default) { [weak self] _ in
+            self?.presentFolderEditor(title: "Название папки", initialTitle: folder.title) { title in
+                self?.presenter.didRenameFolder(id: folder.id, title: title)
+            }
+        })
+        sheet.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in
+            self?.presentFolderDeleteConfirmation(folder)
+        })
+        sheet.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = folderButton
+        sheet.popoverPresentationController?.sourceRect = folderButton.bounds
+        present(sheet, animated: true)
     }
 
-    private func resetPhraseDisplayRotationIfNeeded(animated: Bool) {
-        guard isPhraseDisplayRotated else { return }
+    private func presentFolderDeleteConfirmation(_ folder: PhrasesViewModel.FolderItem) {
+        let alert = UIAlertController(
+            title: "Удалить папку?",
+            message: "Фразы останутся и перейдут в раздел без папки.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in
+            self?.presenter.didDeleteFolder(id: folder.id)
+        })
+        present(alert, animated: true)
+    }
 
-        isPhraseDisplayRotated = false
-        let changes = {
-            self.view.transform = .identity
-        }
-
-        if animated {
-            UIView.animate(withDuration: 0.3, animations: changes)
-        } else {
-            changes()
-        }
+    private func presentPhraseDeleteConfirmation(_ item: PhrasesViewModel.Item) {
+        let alert = UIAlertController(
+            title: "Удалить фразу?",
+            message: item.title,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Удалить", style: .destructive) { [weak self] _ in
+            self?.presenter.didDeletePhrase(id: item.id)
+        })
+        present(alert, animated: true)
     }
 
     private func makeMenu(
@@ -546,12 +486,13 @@ final class PhrasesViewController: UIViewController {
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
-            self?.presenter.didDeletePhrase(id: item.id)
+            self?.presentPhraseDeleteConfirmation(item)
         }
 
         return UIMenu(children: [
             editAction,
             pinAction,
+            makeMoveMenu(for: item),
             exportAction,
             shareAction,
             deleteAction
@@ -562,6 +503,12 @@ final class PhrasesViewController: UIViewController {
 extension PhrasesViewController: PhrasesView {
     func render(_ viewModel: PhrasesViewModel) {
         titleLabel.text = viewModel.title
+        folders = viewModel.folders
+        var configuration = folderButton.configuration
+        configuration?.title = viewModel.selectedFolderTitle
+        folderButton.configuration = configuration
+        folderButton.accessibilityValue = viewModel.selectedFolderTitle
+        folderButton.menu = makeFolderMenu(selectedTitle: viewModel.selectedFolderTitle)
 
         switch viewModel.state {
         case .loading:
@@ -570,12 +517,12 @@ extension PhrasesViewController: PhrasesView {
             tableView.isHidden = true
             stateLabel.isHidden = true
             activityIndicator.startAnimating()
-        case .empty:
+        case .empty(let message):
             items = []
             tableView.reloadData()
             tableView.isHidden = true
             activityIndicator.stopAnimating()
-            stateLabel.text = "Фраз пока нет"
+            stateLabel.text = message
             stateLabel.isHidden = false
         case .content(let items):
             self.items = items
@@ -591,6 +538,20 @@ extension PhrasesViewController: PhrasesView {
             stateLabel.text = message
             stateLabel.isHidden = false
         }
+    }
+
+    func presentPhrasesError(_ message: String) {
+        presentError(message)
+    }
+}
+
+extension PhrasesViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        presenter.didUpdateSearchQuery(searchText)
+    }
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.resignFirstResponder()
     }
 }
 
@@ -659,6 +620,8 @@ private final class PhraseCell: UITableViewCell {
             UIImage(named: isPinned ? "pin_filled" : "pin")?.withRenderingMode(.alwaysOriginal),
             for: .normal
         )
+        pinButton.accessibilityLabel = isPinned ? "Снять отметку с фразы" : "Отметить фразу"
+        pinButton.accessibilityValue = isPinned ? "Отмечена" : "Не отмечена"
         menuButton.menu = menu
     }
 
@@ -668,7 +631,6 @@ private final class PhraseCell: UITableViewCell {
         selectionStyle = .default
 
         pinButton.tintColor = .black
-        pinButton.accessibilityLabel = "Закрепить фразу"
         pinButton.addTarget(self, action: #selector(pinTapped), for: .touchUpInside)
         pinButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -676,6 +638,7 @@ private final class PhraseCell: UITableViewCell {
         phraseLabel.textColor = .black
         phraseLabel.font = UIFont(name: "YSDisplay-Medium", size: 17)
             ?? .systemFont(ofSize: 17, weight: .medium)
+        phraseLabel.adjustsFontForContentSizeCategory = true
         phraseLabel.translatesAutoresizingMaskIntoConstraints = false
 
         menuButton.setImage(UIImage(systemName: "ellipsis"), for: .normal)
@@ -720,119 +683,5 @@ private final class PhraseCell: UITableViewCell {
 
     @objc private func pinTapped() {
         onPinTap?()
-    }
-}
-
-private final class PhraseDisplayOverlayView: UIView {
-    private let text: String
-    private let textToSpeechService: TextToSpeechService
-    private let playButton = UIButton(type: .system)
-    var onDismiss: (() -> Void)?
-    var onRotate: (() -> Void)?
-
-    init(text: String, textToSpeechService: TextToSpeechService) {
-        self.text = text
-        self.textToSpeechService = textToSpeechService
-        super.init(frame: .zero)
-        setupView()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    private func setupView() {
-        backgroundColor = .backgroundYandex
-
-        let textLabel = UILabel()
-        textLabel.text = text
-        textLabel.numberOfLines = 0
-        textLabel.textAlignment = .center
-        textLabel.adjustsFontSizeToFitWidth = true
-        textLabel.minimumScaleFactor = 0.45
-        textLabel.font = UIFont(name: "YSDisplay-Bold", size: 40)
-            ?? .systemFont(ofSize: 40, weight: .bold)
-        textLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        let playImage = UIImage(named: "playButtonIcon")?.withRenderingMode(.alwaysOriginal)
-        var playConfiguration = UIButton.Configuration.filled()
-        playConfiguration.title = "Воспроизвести"
-        playConfiguration.image = playImage
-        playConfiguration.imagePlacement = .leading
-        playConfiguration.imagePadding = 8
-        playConfiguration.baseForegroundColor = .black
-        playConfiguration.baseBackgroundColor = .yellowYandex
-        playConfiguration.cornerStyle = .large
-        playButton.configuration = playConfiguration
-        playButton.titleLabel?.font = UIFont(name: "YSDisplay-Medium", size: 18)
-        playButton.addTarget(self, action: #selector(playTapped), for: .touchUpInside)
-        playButton.translatesAutoresizingMaskIntoConstraints = false
-
-        let closeButton = UIButton(type: .system)
-        closeButton.setImage(
-            UIImage(named: "dismisIconMicroOnScreen")?.withRenderingMode(.alwaysOriginal),
-            for: .normal
-        )
-        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-
-        let rotateButton = UIButton(type: .system)
-        rotateButton.setImage(
-            UIImage(named: "rotateIconMicroOnScreen")?.withRenderingMode(.alwaysOriginal),
-            for: .normal
-        )
-        rotateButton.addTarget(self, action: #selector(rotateTapped), for: .touchUpInside)
-        rotateButton.translatesAutoresizingMaskIntoConstraints = false
-
-        addSubview(textLabel)
-        addSubview(playButton)
-        addSubview(closeButton)
-        addSubview(rotateButton)
-
-        NSLayoutConstraint.activate([
-            textLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            textLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            textLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
-            textLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
-
-            playButton.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -12),
-            playButton.centerXAnchor.constraint(equalTo: centerXAnchor),
-            playButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            playButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            playButton.heightAnchor.constraint(equalToConstant: 64),
-
-            closeButton.heightAnchor.constraint(equalToConstant: 56),
-            closeButton.widthAnchor.constraint(equalToConstant: 56),
-            closeButton.trailingAnchor.constraint(equalTo: playButton.trailingAnchor),
-            closeButton.bottomAnchor.constraint(equalTo: playButton.topAnchor, constant: -24),
-
-            rotateButton.heightAnchor.constraint(equalToConstant: 56),
-            rotateButton.widthAnchor.constraint(equalToConstant: 56),
-            rotateButton.leadingAnchor.constraint(equalTo: playButton.leadingAnchor),
-            rotateButton.bottomAnchor.constraint(equalTo: playButton.topAnchor, constant: -24)
-        ])
-    }
-
-    @objc private func playTapped() {
-        textToSpeechService.speak(text)
-    }
-
-    @objc private func rotateTapped() {
-        onRotate?()
-    }
-
-    @objc private func closeTapped() {
-        textToSpeechService.stop()
-        UIView.animate(
-            withDuration: 0.2,
-            delay: 0,
-            options: [.curveEaseInOut]
-        ) {
-            self.alpha = 0
-            self.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
-        } completion: { _ in
-            self.removeFromSuperview()
-            self.onDismiss?()
-        }
     }
 }

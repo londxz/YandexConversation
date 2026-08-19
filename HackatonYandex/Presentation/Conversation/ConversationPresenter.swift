@@ -45,18 +45,19 @@ private enum VoiceInputState {
     case recognizing
 }
 
+@MainActor
 protocol ConversationView: AnyObject {
     func render(_ viewModel: ConversationViewModel)
     func displayStartTypingHint()
     func displayMicrophoneHint()
     func hideConversationHints()
-    func presentMicrophoneOverlay()
+    func displayLargeText(_ text: String)
+    func dismissLargeTextDisplay()
     func displayRecognizedSpeech(_ text: String)
     func displayConversationError(_ message: String)
     func displaySubmittedText(_ text: String)
     func clearConversationMessages()
-    func toggleConversationDisplayRotation()
-    func resetConversationDisplay()
+    func displayConversationMessages(_ messages: [ConversationMessage])
 }
 
 @MainActor
@@ -65,7 +66,10 @@ final class ConversationPresenter {
     private let microphonePermissionService: MicrophonePermissionService
     private let audioRecordingService: AudioRecordingService
     private let speechRecognitionService: SpeechRecognitionService
+    private let textToSpeechService: TextToSpeechService
     private let fetchSettingsUseCase: FetchSettingsUseCase
+    private let fetchConversationUseCase: FetchConversationUseCase
+    private let fetchConversationMessagesUseCase: FetchConversationMessagesUseCase
     private let saveConversationUseCase: SaveConversationUseCase
     private let addConversationMessageUseCase: AddConversationMessageUseCase
     private var mode: ConversationMode = .talk
@@ -79,7 +83,10 @@ final class ConversationPresenter {
         microphonePermissionService: MicrophonePermissionService,
         audioRecordingService: AudioRecordingService,
         speechRecognitionService: SpeechRecognitionService,
+        textToSpeechService: TextToSpeechService,
         fetchSettingsUseCase: FetchSettingsUseCase,
+        fetchConversationUseCase: FetchConversationUseCase,
+        fetchConversationMessagesUseCase: FetchConversationMessagesUseCase,
         saveConversationUseCase: SaveConversationUseCase,
         addConversationMessageUseCase: AddConversationMessageUseCase
     ) {
@@ -87,7 +94,10 @@ final class ConversationPresenter {
         self.microphonePermissionService = microphonePermissionService
         self.audioRecordingService = audioRecordingService
         self.speechRecognitionService = speechRecognitionService
+        self.textToSpeechService = textToSpeechService
         self.fetchSettingsUseCase = fetchSettingsUseCase
+        self.fetchConversationUseCase = fetchConversationUseCase
+        self.fetchConversationMessagesUseCase = fetchConversationMessagesUseCase
         self.saveConversationUseCase = saveConversationUseCase
         self.addConversationMessageUseCase = addConversationMessageUseCase
         self.currentConversation = Self.makeInitialConversation(mode: mode.domainMode)
@@ -104,7 +114,7 @@ final class ConversationPresenter {
 
     func viewDidDisappear() {
         view?.hideConversationHints()
-        view?.resetConversationDisplay()
+        view?.dismissLargeTextDisplay()
     }
 
     func didChangeSegment(index: Int) {
@@ -124,7 +134,9 @@ final class ConversationPresenter {
     }
 
     func didTapMicrophoneHint() {
-        view?.presentMicrophoneOverlay()
+        view?.displayLargeText(
+            "Включен микрофон.\nГоворите.\nПостарайтесь говорить разборчиво и не очень быстро"
+        )
     }
 
     @discardableResult
@@ -221,22 +233,57 @@ final class ConversationPresenter {
         hasPersistedConversation = false
 
         view?.hideConversationHints()
-        view?.resetConversationDisplay()
+        view?.dismissLargeTextDisplay()
         view?.clearConversationMessages()
         renderCurrentMode()
         displayEmptyTalkHintsIfNeeded()
+    }
+
+    func didRequestResumeConversation(id: String) {
+        stopActiveVoiceInputIfNeeded()
+
+        Task { [weak self, fetchConversationUseCase, fetchConversationMessagesUseCase] in
+            guard let self else { return }
+
+            do {
+                guard let conversation = try await fetchConversationUseCase.execute(id: id) else {
+                    self.view?.displayConversationError("Сохраненный разговор не найден.")
+                    return
+                }
+
+                let messages = try await fetchConversationMessagesUseCase.execute(
+                    conversationId: conversation.id
+                )
+
+                self.currentConversation = conversation
+                self.mode = ConversationMode(domainMode: conversation.mode)
+                self.hasPersistedConversation = true
+                self.view?.hideConversationHints()
+                self.view?.dismissLargeTextDisplay()
+                self.view?.clearConversationMessages()
+                self.renderCurrentMode()
+                self.view?.displayConversationMessages(messages)
+            } catch {
+                AppLogger.error("Failed to resume conversation: \(error.localizedDescription)")
+                self.view?.displayConversationError("Не удалось продолжить разговор.")
+            }
+        }
     }
 
     func didShowEmptyTalkScreen() {
         displayEmptyTalkHintsIfNeeded()
     }
 
-    func didRequestRotationToggle() {
-        view?.toggleConversationDisplayRotation()
+    func didRequestLargeText(_ text: String) {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else { return }
+        view?.displayLargeText(normalizedText)
     }
 
-    func didRequestResetRotation() {
-        view?.resetConversationDisplay()
+    func didRequestSpeak(_ text: String) {
+        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedText.isEmpty else { return }
+        textToSpeechService.speak(normalizedText)
     }
 
     private func renderCurrentMode() {
@@ -402,6 +449,15 @@ final class ConversationPresenter {
 }
 
 private extension ConversationMode {
+    init(domainMode: Conversation.Mode) {
+        switch domainMode {
+        case .talk:
+            self = .talk
+        case .listen:
+            self = .listen
+        }
+    }
+
     var domainMode: Conversation.Mode {
         switch self {
         case .talk:

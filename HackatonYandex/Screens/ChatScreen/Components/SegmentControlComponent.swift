@@ -2,11 +2,12 @@
 //  SegmentControlComponent.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import UIKit
 
+@MainActor
 protocol SegmentControlComponentDelegate: AnyObject {
     func segmentChanged(to index: Int)
 }

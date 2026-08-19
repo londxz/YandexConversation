@@ -7,11 +7,13 @@
 
 import Foundation
 
+@MainActor
 protocol HistoryDetailView: AnyObject {
     func render(_ viewModel: HistoryDetailViewModel)
     func presentHistoryDetailError(_ message: String)
     func shareDetailTranscriptText(_ text: String)
     func shareDetailTranscriptFile(text: String, fileName: String)
+    func continueConversation(id: String)
 }
 
 struct HistoryDetailViewModel {

@@ -21,6 +21,7 @@ final class CoreDataLocalDataRepository: LocalDataRepository {
                 "CDConversationMessage",
                 "CDConversation",
                 "CDPhrase",
+                "CDPhraseFolder",
                 "CDLocalMetadata",
                 "CDAppSettings"
             ]

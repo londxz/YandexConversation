@@ -311,7 +311,6 @@ Required:
 - list conversations;
 - open conversation;
 - search;
-- pin/unpin;
 - rename;
 - delete;
 - export/share transcript;
@@ -685,7 +684,6 @@ Use sync only when enabled by the user. Local data remains the app's first sourc
 
 - User can view all saved conversations.
 - User can search by text and title.
-- User can pin important conversations.
 - User can export/share a transcript.
 - User can delete local history.
 
@@ -756,7 +754,7 @@ Use sync only when enabled by the user. Local data remains the app's first sourc
 
 ### Phase 2: Offline-First iOS
 
-- Add SQLite local storage with migrations.
+- Add Core Data local storage with lightweight migrations.
 - Implement conversations, messages, phrases, settings repositories.
 - Implement talk mode without backend dependency: typing, large display, TTS, local history.
 - Implement quick phrases fully.
@@ -800,7 +798,7 @@ Use sync only when enabled by the user. Local data remains the app's first sourc
 iOS:
 
 - Unit tests for presenters and use cases.
-- Repository tests with temporary SQLite database.
+- Repository tests with an in-memory Core Data store.
 - Contract tests for API DTO decoding.
 - UI smoke tests for core flows.
 - Manual accessibility QA with VoiceOver and Dynamic Type.
@@ -816,14 +814,14 @@ Go:
 
 ## Current Codebase Notes
 
-Known prototype areas to fix before building production features:
+The iOS production foundation is in place:
 
-- `SceneDelegate` currently forces onboarding every launch.
-- Talk and Listen screens are visually present but functionally empty.
-- Recognized text is printed to console instead of entering the conversation model.
-- Quick phrases and settings tabs are placeholders.
-- Networking is hardcoded to `127.0.0.1:8000`.
-- Audio recording, networking, and UI are mixed inside `ChatComponent`.
-- Some files are unused prototype remnants and should be removed or integrated deliberately.
+- startup is coordinated through `AppCoordinator`, and onboarding state is persisted;
+- dependencies are assembled in `AppContainer`;
+- conversations, messages, phrases, folders, and settings use repository protocols backed by Core Data;
+- talk mode supports local typed messages, quick phrases, TTS, large text display, and explicit history restore;
+- history, phrases, folders, search, and settings are MVP modules;
+- network configuration is environment-based and the existing speech endpoint uses `/v1`;
+- critical presenter and repository paths have an XCTest target and in-memory Core Data tests.
 
-Do not build new production functionality on top of these prototype shortcuts. Stabilize architecture first.
+The next product boundary is the backend and speech integration. Realtime recognition, speaker diarization, sync, device sessions, and server-side privacy/observability are intentionally not presented as completed. Keep local typing, TTS, phrases, settings, and history independent from backend availability.

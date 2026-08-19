@@ -18,6 +18,7 @@ final class HistoryDetailViewController: UIViewController {
     private let conversationId: String
     private let historyTitle: String
     private let fetchConversationMessagesUseCase: FetchConversationMessagesUseCase
+    private let onContinueConversation: (String) -> Void
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let stateLabel = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
@@ -26,11 +27,13 @@ final class HistoryDetailViewController: UIViewController {
     init(
         conversationId: String,
         title: String,
-        fetchConversationMessagesUseCase: FetchConversationMessagesUseCase
+        fetchConversationMessagesUseCase: FetchConversationMessagesUseCase,
+        onContinueConversation: @escaping (String) -> Void
     ) {
         self.conversationId = conversationId
         self.historyTitle = title
         self.fetchConversationMessagesUseCase = fetchConversationMessagesUseCase
+        self.onContinueConversation = onContinueConversation
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -47,11 +50,20 @@ final class HistoryDetailViewController: UIViewController {
     private func setupView() {
         view.backgroundColor = .chatBackground
         navigationItem.title = historyTitle
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let shareButton = UIBarButtonItem(
             image: UIImage(systemName: "square.and.arrow.up"),
             menu: makeShareMenu()
         )
-        navigationItem.rightBarButtonItem?.accessibilityLabel = "Поделиться разговором"
+        shareButton.accessibilityLabel = "Поделиться разговором"
+
+        let continueButton = UIBarButtonItem(
+            image: UIImage(systemName: "arrow.right.circle.fill"),
+            style: .plain,
+            target: self,
+            action: #selector(continueTapped)
+        )
+        continueButton.accessibilityLabel = "Продолжить разговор"
+        navigationItem.rightBarButtonItems = [continueButton, shareButton]
 
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.backgroundColor = .chatBackground
@@ -119,6 +131,10 @@ final class HistoryDetailViewController: UIViewController {
         )
         present(activityVC, animated: true)
     }
+
+    @objc private func continueTapped() {
+        presenter.didRequestContinueConversation()
+    }
 }
 
 extension HistoryDetailViewController: HistoryDetailView {
@@ -178,6 +194,10 @@ extension HistoryDetailViewController: HistoryDetailView {
             AppLogger.error("Failed to export transcript: \(error.localizedDescription)")
             presentHistoryDetailError("Не удалось подготовить файл.")
         }
+    }
+
+    func continueConversation(id: String) {
+        onContinueConversation(id)
     }
 }
 

@@ -9,6 +9,7 @@ import UIKit
 
 final class HistoryViewController: UIViewController {
     private let container: AppContainer
+    private let onContinueConversation: (String) -> Void
     private lazy var presenter = HistoryPresenter(
         view: self,
         fetchConversationHistoryUseCase: container.fetchConversationHistoryUseCase,
@@ -25,14 +26,17 @@ final class HistoryViewController: UIViewController {
     private let searchController = UISearchController(searchResultsController: nil)
     private var hasLoadedHistory = false
 
-    init(container: AppContainer) {
+    init(
+        container: AppContainer,
+        onContinueConversation: @escaping (String) -> Void = { _ in }
+    ) {
         self.container = container
+        self.onContinueConversation = onContinueConversation
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
-        self.container = AppContainer()
-        super.init(coder: coder)
+        fatalError("init(coder:) has not been implemented")
     }
 
     override func viewDidLoad() {
@@ -291,7 +295,8 @@ extension HistoryViewController: UITableViewDataSource, UITableViewDelegate {
         let detailVC = HistoryDetailViewController(
             conversationId: item.id,
             title: item.title,
-            fetchConversationMessagesUseCase: container.fetchConversationMessagesUseCase
+            fetchConversationMessagesUseCase: container.fetchConversationMessagesUseCase,
+            onContinueConversation: onContinueConversation
         )
 
         navigationController?.pushViewController(detailVC, animated: true)

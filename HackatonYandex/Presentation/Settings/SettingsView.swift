@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 protocol SettingsView: AnyObject {
     func render(_ viewModel: SettingsViewModel)
     func presentSelection(_ viewModel: SettingsSelectionViewModel)

@@ -2,7 +2,7 @@
 //  ChatVCExtension.swift
 //  HackatonYandex
 //
-//  Created by Родион Холодов on 01.06.2025.
+//  Created by Rodion Kholodov.
 //
 
 import UIKit
@@ -15,7 +15,7 @@ extension ChatVC: UIGestureRecognizerDelegate {
     }
 }
 
-extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate, MicroEnabledViewDelegate {
+extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate {
 
     func segmentChanged(to index: Int) {
         presenter.didChangeSegment(index: index)
@@ -25,12 +25,12 @@ extension ChatVC: SegmentControlComponentDelegate, TalkViewControllerDelegate, M
         presenter.didShowEmptyTalkScreen()
     }
 
-    func didRequestRotationToggle() {
-        presenter.didRequestRotationToggle()
+    func talkViewController(_ viewController: TalkViewController, didRequestLargeText text: String) {
+        presenter.didRequestLargeText(text)
     }
 
-    func didRequestResetRotation() {
-        presenter.didRequestResetRotation()
+    func talkViewController(_ viewController: TalkViewController, didRequestSpeak text: String) {
+        presenter.didRequestSpeak(text)
     }
 }
 
@@ -88,51 +88,51 @@ extension ChatVC: ConversationView {
         microphoneHint = nil
     }
 
-    func presentMicrophoneOverlay() {
-        microEnabledView?.removeFromSuperview()
-        
-        let overlay = MicroEnabledView()
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.alpha = 0
-        overlay.transform = CGAffineTransform(scaleX: 1.1, y: 1.1) // чуть увеличен сначала
+    func displayLargeText(_ text: String) {
+        dismissLargeTextDisplayIfNeeded()
 
-        view.addSubview(overlay)
-        microEnabledView = overlay
-        microEnabledView?.delegate = self
-        
-        NSLayoutConstraint.activate([
-            overlay.topAnchor.constraint(equalTo: view.topAnchor),
-            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        ])
-
-        UIView.animate(withDuration: 0.4,
-                       delay: 0,
-                       usingSpringWithDamping: 0.8,
-                       initialSpringVelocity: 0.5,
-                       options: [.curveEaseInOut],
-                       animations: {
-            overlay.alpha = 1
-            overlay.transform = .identity
-        }, completion: nil)
+        let displayViewController = LargeTextDisplayViewController(text: text, container: container)
+        displayViewController.onDismiss = { [weak self, weak displayViewController] in
+            guard self?.largeTextDisplayViewController === displayViewController else { return }
+            self?.largeTextDisplayViewController = nil
+        }
+        largeTextDisplayViewController = displayViewController
+        displayViewController.attach(to: self)
     }
 
-    func toggleConversationDisplayRotation() {
-        toggleRotation()
-    }
-
-    func resetConversationDisplay() {
-        resetRotationIfNeeded()
+    func dismissLargeTextDisplay() {
+        dismissLargeTextDisplayIfNeeded()
     }
 
     func clearConversationMessages() {
-        dismissMicrophoneOverlayIfNeeded()
+        dismissLargeTextDisplayIfNeeded()
         hideQuickPhrasePanel(animated: false)
         chatComponent.textField.text = nil
         chatComponent.resetVoiceInputState()
         talkVC.clearMessages()
         listenVC.clearTranscript()
+    }
+
+    func displayConversationMessages(_ messages: [ConversationMessage]) {
+        for message in messages {
+            switch currentConversationMode {
+            case .talk:
+                switch message.source {
+                case .userTyped, .userVoice, .quickPhrase:
+                    talkVC.appendUserMessage(message.text, createdAt: message.createdAt)
+                case .externalSpeech, .system:
+                    talkVC.appendIncomingMessage(
+                        message.text,
+                        speakerLabel: message.speakerLabel ?? "Говорящий"
+                    )
+                }
+            case .listen:
+                listenVC.appendSpeech(
+                    message.text,
+                    speakerLabel: message.speakerLabel ?? "Говорящий"
+                )
+            }
+        }
     }
 }
 

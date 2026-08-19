@@ -27,8 +27,7 @@ final class SettingsViewController: UIViewController {
     }
 
     required init?(coder: NSCoder) {
-        self.container = AppContainer()
-        super.init(coder: coder)
+        fatalError("init(coder:) has not been implemented")
     }
 
     override func viewDidLoad() {
