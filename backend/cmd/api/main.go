@@ -1,0 +1,109 @@
+// Created by Rodion Kholodov.
+
+package main
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/londxz/HackatonYandex/backend/internal/app"
+	"github.com/londxz/HackatonYandex/backend/internal/buildinfo"
+	"github.com/londxz/HackatonYandex/backend/internal/config"
+	"github.com/londxz/HackatonYandex/backend/internal/observability"
+	"github.com/londxz/HackatonYandex/backend/internal/repository/postgres"
+	httptransport "github.com/londxz/HackatonYandex/backend/internal/transport/http"
+	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
+)
+
+func main() {
+	os.Exit(run())
+}
+
+func run() int {
+	bootstrapLogger := observability.NewLogger(os.Stdout, "unknown", "info")
+	appConfig, err := config.Load()
+	if err != nil {
+		bootstrapLogger.Error("configuration is invalid", "error", err)
+		return 1
+	}
+
+	logger := observability.NewLogger(os.Stdout, appConfig.Environment, appConfig.LogLevel)
+	startupContext, cancelStartup := context.WithTimeout(context.Background(), appConfig.Database.ConnectTimeout)
+	defer cancelStartup()
+
+	pool, err := postgres.Open(startupContext, appConfig.Database)
+	if err != nil {
+		logger.Error("database initialization failed", "error", err)
+		return 1
+	}
+	defer pool.Close()
+
+	healthHandler := handlers.NewHealthHandler(
+		pool,
+		logger,
+		buildinfo.Version,
+		appConfig.Database.HealthTimeout,
+	)
+	router := httptransport.NewRouter(httptransport.RouterDependencies{
+		Logger:        logger,
+		HealthHandler: healthHandler,
+		MaxBodyBytes:  appConfig.HTTP.MaxBodyBytes,
+	})
+	server := app.NewServer(appConfig.HTTP, router, logger)
+
+	signalContext, stopSignals := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stopSignals()
+
+	serverErrors := make(chan error, 1)
+	go func() {
+		serverErrors <- server.Run()
+	}()
+
+	logger.Info(
+		"HTTP server started",
+		"address", appConfig.HTTP.Address,
+		"version", buildinfo.Version,
+		"commit", buildinfo.Commit,
+		"build_time", buildinfo.BuildTime,
+	)
+
+	select {
+	case err := <-serverErrors:
+		if err != nil {
+			logger.Error("HTTP server stopped unexpectedly", "error", err)
+			return 1
+		}
+		return 0
+	case <-signalContext.Done():
+		logger.Info("shutdown signal received")
+	}
+
+	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), appConfig.ShutdownTimeout)
+	defer cancelShutdown()
+	if err := server.Shutdown(shutdownContext); err != nil {
+		logger.Error("graceful shutdown failed", "error", err)
+		return 1
+	}
+
+	waitForServerExit(logger, serverErrors)
+	return 0
+}
+
+func waitForServerExit(logger *slog.Logger, serverErrors <-chan error) {
+	select {
+	case err := <-serverErrors:
+		if err != nil {
+			logger.Error("HTTP server returned an error during shutdown", "error", err)
+		}
+	case <-time.After(time.Second):
+		logger.Warn("timed out waiting for HTTP server goroutine")
+	}
+}
