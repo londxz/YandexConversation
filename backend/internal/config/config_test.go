@@ -31,6 +31,12 @@ func TestLoadUsesProductionDefaults(t *testing.T) {
 	if config.Database.HealthTimeout != 2*time.Second {
 		t.Fatalf("HealthTimeout = %s, want 2s", config.Database.HealthTimeout)
 	}
+	if config.Speech.Provider != "disabled" {
+		t.Fatalf("Speech provider = %q, want disabled", config.Speech.Provider)
+	}
+	if config.Speech.MaxAudioBytes != 1<<20 || config.Speech.MaxDuration != 30*time.Second {
+		t.Fatalf("Speech limits = %d bytes, %s", config.Speech.MaxAudioBytes, config.Speech.MaxDuration)
+	}
 }
 
 func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
@@ -89,8 +95,50 @@ func TestLoadRejectsRefreshTTLShorterThanAccessTTL(t *testing.T) {
 	}
 }
 
+func TestLoadRequiresSpeechProviderInProduction(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("APP_ENV", "production")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want disabled production speech error")
+	}
+}
+
+func TestLoadRequiresYandexAPIKey(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("SPEECH_PROVIDER", "yandex")
+	t.Setenv("YANDEX_SPEECHKIT_API_KEY", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want missing SpeechKit API key error")
+	}
+}
+
+func TestLoadAcceptsConfiguredYandexProvider(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("SPEECH_PROVIDER", "yandex")
+	t.Setenv("YANDEX_SPEECHKIT_API_KEY", "secret-api-key")
+
+	config, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if config.Speech.Provider != "yandex" || config.Speech.YandexAPIKey != "secret-api-key" {
+		t.Fatalf("Speech config = %#v", config.Speech)
+	}
+}
+
 func setTestSecrets(t *testing.T) {
 	t.Helper()
 	t.Setenv("TOKEN_PEPPER_BASE64", "bG9jYWwtdG9rZW4tcGVwcGVyLTMyLWJ5dGUtdmFsdWU=")
 	t.Setenv("IDEMPOTENCY_ENCRYPTION_KEY_BASE64", "bG9jYWwtaWRlbXBvdGVuY3ktMzItYnl0ZS12YWx1ZXM=")
+	t.Setenv("SPEECH_PROVIDER", "")
+	t.Setenv("SPEECH_SUPPORTED_LANGUAGES", "")
+	t.Setenv("YANDEX_SPEECHKIT_ENDPOINT", "")
+	t.Setenv("YANDEX_SPEECHKIT_API_KEY", "")
 }

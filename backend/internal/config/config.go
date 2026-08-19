@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ type Config struct {
 	HTTP            HTTPConfig
 	Database        DatabaseConfig
 	DeviceSessions  DeviceSessionConfig
+	Speech          SpeechConfig
 	Secrets         SecretsConfig
 }
 
@@ -45,6 +47,17 @@ type DeviceSessionConfig struct {
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
 	IdempotencyTTL  time.Duration
+}
+
+type SpeechConfig struct {
+	Provider           string
+	RecognitionTimeout time.Duration
+	MaxAudioBytes      int64
+	MaxDuration        time.Duration
+	SupportedLanguages []string
+	MaxConcurrent      int
+	YandexEndpoint     string
+	YandexAPIKey       string
 }
 
 type SecretsConfig struct {
@@ -78,6 +91,16 @@ func Load() (Config, error) {
 			AccessTokenTTL:  15 * time.Minute,
 			RefreshTokenTTL: 90 * 24 * time.Hour,
 			IdempotencyTTL:  24 * time.Hour,
+		},
+		Speech: SpeechConfig{
+			Provider:           valueOrDefault("SPEECH_PROVIDER", "disabled"),
+			RecognitionTimeout: 20 * time.Second,
+			MaxAudioBytes:      1 << 20,
+			MaxDuration:        30 * time.Second,
+			SupportedLanguages: commaSeparated(valueOrDefault("SPEECH_SUPPORTED_LANGUAGES", "ru-RU,en-US")),
+			MaxConcurrent:      16,
+			YandexEndpoint:     valueOrDefault("YANDEX_SPEECHKIT_ENDPOINT", "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize"),
+			YandexAPIKey:       strings.TrimSpace(os.Getenv("YANDEX_SPEECHKIT_API_KEY")),
 		},
 	}
 
@@ -127,6 +150,18 @@ func Load() (Config, error) {
 	if config.DeviceSessions.IdempotencyTTL, err = duration("IDEMPOTENCY_TTL", config.DeviceSessions.IdempotencyTTL); err != nil {
 		return Config{}, err
 	}
+	if config.Speech.RecognitionTimeout, err = duration("SPEECH_RECOGNITION_TIMEOUT", config.Speech.RecognitionTimeout); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.MaxAudioBytes, err = positiveInt64("SPEECH_MAX_AUDIO_BYTES", config.Speech.MaxAudioBytes); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.MaxDuration, err = duration("SPEECH_MAX_DURATION", config.Speech.MaxDuration); err != nil {
+		return Config{}, err
+	}
+	if config.Speech.MaxConcurrent, err = positiveInt("SPEECH_MAX_CONCURRENT_REQUESTS", config.Speech.MaxConcurrent); err != nil {
+		return Config{}, err
+	}
 	if config.Secrets.TokenPepper, err = secret("TOKEN_PEPPER_BASE64"); err != nil {
 		return Config{}, err
 	}
@@ -174,8 +209,56 @@ func (config Config) validate() error {
 	if config.DeviceSessions.RefreshTokenTTL <= config.DeviceSessions.AccessTokenTTL {
 		return errors.New("REFRESH_TOKEN_TTL must exceed ACCESS_TOKEN_TTL")
 	}
+	if config.Speech.Provider != "disabled" && config.Speech.Provider != "yandex" {
+		return errors.New("SPEECH_PROVIDER must be disabled or yandex")
+	}
+	if config.Environment == "production" && config.Speech.Provider == "disabled" {
+		return errors.New("SPEECH_PROVIDER cannot be disabled in production")
+	}
+	if len(config.Speech.SupportedLanguages) == 0 {
+		return errors.New("SPEECH_SUPPORTED_LANGUAGES must contain at least one language")
+	}
+	if config.Speech.Provider == "yandex" {
+		if !isSafeHeaderSecret(config.Speech.YandexAPIKey) {
+			return errors.New("YANDEX_SPEECHKIT_API_KEY must contain 1-1024 visible ASCII characters")
+		}
+		endpoint, err := url.Parse(config.Speech.YandexEndpoint)
+		if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil {
+			return errors.New("YANDEX_SPEECHKIT_ENDPOINT must be an HTTPS URL without credentials")
+		}
+	}
 
 	return nil
+}
+
+func isSafeHeaderSecret(value string) bool {
+	if value == "" || len(value) > 1024 {
+		return false
+	}
+	for index := range len(value) {
+		if value[index] < 0x21 || value[index] > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func commaSeparated(value string) []string {
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, found := seen[part]; found {
+			continue
+		}
+		seen[part] = struct{}{}
+		values = append(values, part)
+	}
+	return values
 }
 
 func secret(key string) ([]byte, error) {
@@ -234,6 +317,17 @@ func positiveInt32(key string, fallback int32) (int32, error) {
 		return 0, fmt.Errorf("%s is too large", key)
 	}
 	return int32(value), nil
+}
+
+func positiveInt(key string, fallback int) (int, error) {
+	value, err := positiveInt64(key, int64(fallback))
+	if err != nil {
+		return 0, err
+	}
+	if int64(int(value)) != value {
+		return 0, fmt.Errorf("%s is too large", key)
+	}
+	return int(value), nil
 }
 
 func nonNegativeInt32(key string, fallback int32) (int32, error) {

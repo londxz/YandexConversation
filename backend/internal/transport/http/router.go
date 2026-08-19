@@ -16,6 +16,7 @@ type RouterDependencies struct {
 	Logger              *slog.Logger
 	HealthHandler       *handlers.HealthHandler
 	DeviceHandler       *handlers.DeviceHandler
+	SpeechHandler       *handlers.SpeechHandler
 	DeviceAuthenticator appmiddleware.AccessTokenAuthenticator
 	MaxBodyBytes        int64
 }
@@ -38,6 +39,9 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 			appmiddleware.RequireAccessToken(dependencies.DeviceAuthenticator, dependencies.Logger),
 		).Delete("/{device_id}", dependencies.DeviceHandler.Delete)
 	})
+	router.With(
+		appmiddleware.RequireAccessToken(dependencies.DeviceAuthenticator, dependencies.Logger),
+	).Post("/v1/speech/transcribe", dependencies.SpeechHandler.Transcribe)
 
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, http.StatusNotFound, "not_found", "Resource not found.")

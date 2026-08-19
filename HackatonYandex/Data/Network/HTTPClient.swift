@@ -12,9 +12,25 @@ struct HTTPClientResponse {
     let response: HTTPURLResponse
 }
 
+protocol HTTPTransport {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+}
+
+private final class URLSessionHTTPTransport: HTTPTransport {
+    private let urlSession: URLSession
+
+    init(urlSession: URLSession) {
+        self.urlSession = urlSession
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await urlSession.data(for: request)
+    }
+}
+
 final class HTTPClient {
     private let config: AppConfig
-    private let urlSession: URLSession
+    private let transport: HTTPTransport
     private let decoder: JSONDecoder
 
     init(
@@ -23,7 +39,17 @@ final class HTTPClient {
         decoder: JSONDecoder = JSONDecoder()
     ) {
         self.config = config
-        self.urlSession = urlSession
+        transport = URLSessionHTTPTransport(urlSession: urlSession)
+        self.decoder = decoder
+    }
+
+    init(
+        config: AppConfig,
+        transport: HTTPTransport,
+        decoder: JSONDecoder = JSONDecoder()
+    ) {
+        self.config = config
+        self.transport = transport
         self.decoder = decoder
     }
 
@@ -47,7 +73,7 @@ final class HTTPClient {
 
     func send(_ request: URLRequest) async throws -> HTTPClientResponse {
         do {
-            let (data, response) = try await urlSession.data(for: request)
+            let (data, response) = try await transport.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw AppError.unknown
             }

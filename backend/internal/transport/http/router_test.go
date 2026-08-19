@@ -18,6 +18,7 @@ import (
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/respond"
 	deviceusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/devices"
+	speechusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/speech"
 )
 
 type pingerStub struct {
@@ -26,6 +27,15 @@ type pingerStub struct {
 }
 
 type routerDeviceServiceStub struct{}
+
+type routerSpeechServiceStub struct{}
+
+func (*routerSpeechServiceStub) Transcribe(
+	context.Context,
+	speechusecase.TranscribeInput,
+) (domain.SpeechTranscript, error) {
+	return domain.SpeechTranscript{}, nil
+}
 
 func (*routerDeviceServiceStub) Register(
 	context.Context,
@@ -156,6 +166,18 @@ func TestUnknownRouteUsesStandardErrorEnvelope(t *testing.T) {
 	}
 }
 
+func TestSpeechRouteRequiresDeviceAccessToken(t *testing.T) {
+	router := newTestRouter(&pingerStub{})
+	request := httptest.NewRequest(http.MethodPost, "/v1/speech/transcribe", nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
 func newTestRouter(pinger handlers.Pinger) http.Handler {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	healthHandler := handlers.NewHealthHandler(pinger, logger, "test-version", 100*time.Millisecond)
@@ -164,6 +186,7 @@ func newTestRouter(pinger handlers.Pinger) http.Handler {
 		Logger:              logger,
 		HealthHandler:       healthHandler,
 		DeviceHandler:       handlers.NewDeviceHandler(deviceService, logger),
+		SpeechHandler:       handlers.NewSpeechHandler(&routerSpeechServiceStub{}, logger, 1<<20),
 		DeviceAuthenticator: deviceService,
 		MaxBodyBytes:        1024,
 	})

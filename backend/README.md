@@ -59,6 +59,33 @@ Device session endpoints:
 - `POST /v1/devices/refresh` atomically rotates both opaque tokens.
 - `DELETE /v1/devices/{device_id}` permanently deletes the authenticated device and its server data.
 
+Speech endpoint:
+
+- `POST /v1/speech/transcribe` accepts authenticated `multipart/form-data`
+  containing `file` (PCM16, 16 kHz, mono WAV), `language`, and an optional
+  `conversation_id` UUID.
+
+The synchronous endpoint accepts at most 1 MiB of PCM data and 30 seconds of
+audio. Raw audio is kept only in request memory, is not persisted, and is never
+written to logs.
+
+Each API instance also bounds concurrent recognition calls; excess requests
+receive `429 speech_busy` with `Retry-After: 1`.
+
+For local recognition through Yandex SpeechKit, export a service-account API
+key before starting Compose:
+
+```bash
+export SPEECH_PROVIDER=yandex
+export YANDEX_SPEECHKIT_API_KEY='<secret API key>'
+docker compose up --build -d
+```
+
+The service account must have SpeechKit STT permission. Keep the API key out of
+`.env` files committed to Git; staging and production must inject it from their
+secret manager. With `SPEECH_PROVIDER=disabled`, the endpoint responds with
+`503 speech_unavailable` while all offline iOS features remain available.
+
 Registration and refresh require a unique `Idempotency-Key` containing 16 to
 100 visible ASCII characters. Protected routes use
 `Authorization: Bearer <access_token>`. Clients must keep access and refresh

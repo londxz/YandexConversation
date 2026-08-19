@@ -81,18 +81,8 @@ final class APIContractTests: XCTestCase {
     }
 
     func testDeviceRegistrationRequestAndResponseFollowV1Contract() async throws {
-        let session = makeStubbedURLSession()
         let config = makeConfig()
-        let httpClient = HTTPClient(config: config, urlSession: session)
-        let remoteDataSource = DefaultDeviceSessionRemoteDataSource(
-            httpClient: httpClient,
-            metadataProvider: DeviceMetadataStub(
-                appVersion: "1.2.3",
-                locale: "ru-RU"
-            )
-        )
-
-        URLProtocolStub.handler = { request in
+        let transport = HTTPTransportStub { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.path, "/v1/devices/register")
             XCTAssertEqual(
@@ -104,7 +94,7 @@ final class APIContractTests: XCTestCase {
                 "application/json"
             )
 
-            let body = try self.requestBody(from: request)
+            let body = try XCTUnwrap(request.httpBody)
             let json = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: body) as? [String: String]
             )
@@ -128,8 +118,16 @@ final class APIContractTests: XCTestCase {
                 }
                 """.utf8
             )
-            return (response, responseBody)
+            return (responseBody, response)
         }
+        let httpClient = HTTPClient(config: config, transport: transport)
+        let remoteDataSource = DefaultDeviceSessionRemoteDataSource(
+            httpClient: httpClient,
+            metadataProvider: DeviceMetadataStub(
+                appVersion: "1.2.3",
+                locale: "ru-RU"
+            )
+        )
 
         let deviceSession = try await remoteDataSource.register(
             idempotencyKey: "registration-idempotency-key"
@@ -232,32 +230,6 @@ final class APIContractTests: XCTestCase {
         return URLSession(configuration: configuration)
     }
 
-    private func requestBody(from request: URLRequest) throws -> Data {
-        if let body = request.httpBody {
-            return body
-        }
-
-        let stream = try XCTUnwrap(request.httpBodyStream)
-        stream.open()
-        defer { stream.close() }
-
-        var body = Data()
-        let bufferSize = 1_024
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { buffer.deallocate() }
-
-        while stream.hasBytesAvailable {
-            let bytesRead = stream.read(buffer, maxLength: bufferSize)
-            if bytesRead < 0 {
-                throw try XCTUnwrap(stream.streamError)
-            }
-            if bytesRead == 0 {
-                break
-            }
-            body.append(buffer, count: bytesRead)
-        }
-        return body
-    }
 }
 
 private struct DeviceMetadataStub: DeviceMetadataProviding {
@@ -315,6 +287,18 @@ private final class LockedCounter: @unchecked Sendable {
         defer { lock.unlock() }
         storedValue += 1
         return storedValue
+    }
+}
+
+private final class HTTPTransportStub: HTTPTransport {
+    private let handler: (URLRequest) throws -> (Data, URLResponse)
+
+    init(handler: @escaping (URLRequest) throws -> (Data, URLResponse)) {
+        self.handler = handler
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try handler(request)
     }
 }
 
