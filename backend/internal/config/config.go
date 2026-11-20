@@ -21,6 +21,7 @@ type Config struct {
 	Database        DatabaseConfig
 	DeviceSessions  DeviceSessionConfig
 	Speech          SpeechConfig
+	Diarization     DiarizationConfig
 	Secrets         SecretsConfig
 }
 
@@ -62,6 +63,16 @@ type SpeechConfig struct {
 	StreamMaxSegmentDuration time.Duration
 	StreamMaxChunkBytes      int64
 	StreamMaxConnections     int
+}
+
+type DiarizationConfig struct {
+	Provider            string
+	EmbeddingEndpoint   string
+	EmbeddingTimeout    time.Duration
+	MinimumAudio        time.Duration
+	SimilarityThreshold float64
+	MaximumSpeakers     int
+	MaxConcurrent       int
 }
 
 type SecretsConfig struct {
@@ -109,6 +120,15 @@ func Load() (Config, error) {
 			StreamMaxSegmentDuration: 15 * time.Second,
 			StreamMaxChunkBytes:      64 << 10,
 			StreamMaxConnections:     32,
+		},
+		Diarization: DiarizationConfig{
+			Provider:            strings.ToLower(valueOrDefault("DIARIZATION_PROVIDER", "disabled")),
+			EmbeddingEndpoint:   valueOrDefault("SPEAKER_EMBEDDING_ENDPOINT", "http://127.0.0.1:8091/v1/embedding"),
+			EmbeddingTimeout:    5 * time.Second,
+			MinimumAudio:        time.Second,
+			SimilarityThreshold: 0.72,
+			MaximumSpeakers:     8,
+			MaxConcurrent:       4,
 		},
 	}
 
@@ -185,6 +205,26 @@ func Load() (Config, error) {
 	if config.Speech.StreamMaxConnections, err = positiveInt("SPEECH_STREAM_MAX_CONNECTIONS", config.Speech.StreamMaxConnections); err != nil {
 		return Config{}, err
 	}
+	if config.Diarization.EmbeddingTimeout, err = duration("DIARIZATION_TIMEOUT", config.Diarization.EmbeddingTimeout); err != nil {
+		return Config{}, err
+	}
+	if config.Diarization.MinimumAudio, err = duration("DIARIZATION_MIN_AUDIO_DURATION", config.Diarization.MinimumAudio); err != nil {
+		return Config{}, err
+	}
+	if config.Diarization.SimilarityThreshold, err = boundedFloat64(
+		"DIARIZATION_SIMILARITY_THRESHOLD",
+		config.Diarization.SimilarityThreshold,
+		0,
+		1,
+	); err != nil {
+		return Config{}, err
+	}
+	if config.Diarization.MaximumSpeakers, err = positiveInt("DIARIZATION_MAX_SPEAKERS", config.Diarization.MaximumSpeakers); err != nil {
+		return Config{}, err
+	}
+	if config.Diarization.MaxConcurrent, err = positiveInt("DIARIZATION_MAX_CONCURRENT_REQUESTS", config.Diarization.MaxConcurrent); err != nil {
+		return Config{}, err
+	}
 	if config.Secrets.TokenPepper, err = secret("TOKEN_PEPPER_BASE64"); err != nil {
 		return Config{}, err
 	}
@@ -253,6 +293,19 @@ func (config Config) validate() error {
 	}
 	if config.Speech.StreamSilenceDuration >= config.Speech.StreamMaxSegmentDuration {
 		return errors.New("SPEECH_STREAM_SILENCE_DURATION must be shorter than SPEECH_STREAM_MAX_SEGMENT_DURATION")
+	}
+	switch config.Diarization.Provider {
+	case "disabled":
+	case "sherpa":
+		endpoint, err := url.ParseRequestURI(config.Diarization.EmbeddingEndpoint)
+		if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+			return errors.New("SPEAKER_EMBEDDING_ENDPOINT must be an absolute HTTP or HTTPS URL")
+		}
+	default:
+		return errors.New("DIARIZATION_PROVIDER must be disabled or sherpa")
+	}
+	if config.Diarization.MaximumSpeakers > 32 {
+		return errors.New("DIARIZATION_MAX_SPEAKERS cannot exceed 32")
 	}
 	return nil
 }
@@ -367,4 +420,17 @@ func nonNegativeInt32(key string, fallback int32) (int32, error) {
 		return 0, fmt.Errorf("%s must be a non-negative integer", key)
 	}
 	return int32(parsed), nil
+}
+
+func boundedFloat64(key string, fallback float64, minimum float64, maximum float64) (float64, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed < minimum || parsed > maximum {
+		return 0, fmt.Errorf("%s must be between %g and %g", key, minimum, maximum)
+	}
+	return parsed, nil
 }
