@@ -19,6 +19,7 @@ import (
 	"github.com/londxz/HackatonYandex/backend/internal/security"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/requestctx"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/respond"
+	diarizationusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/diarization"
 	speechusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/speech"
 )
 
@@ -34,6 +35,11 @@ type SpeechService interface {
 	Transcribe(context.Context, speechusecase.TranscribeInput) (domain.SpeechTranscript, error)
 }
 
+type DiarizationService interface {
+	NewSession() *diarizationusecase.Session
+	Embedding(context.Context, []byte, []byte) ([]float32, error)
+}
+
 type SpeechStreamPolicy struct {
 	PartialInterval    time.Duration
 	SilenceDuration    time.Duration
@@ -43,10 +49,11 @@ type SpeechStreamPolicy struct {
 }
 
 type SpeechStreamHandler struct {
-	service SpeechService
-	logger  *slog.Logger
-	policy  SpeechStreamPolicy
-	slots   chan struct{}
+	service     SpeechService
+	diarization DiarizationService
+	logger      *slog.Logger
+	policy      SpeechStreamPolicy
+	slots       chan struct{}
 
 	connectionsMu sync.Mutex
 	connections   map[*websocket.Conn]struct{}
@@ -96,8 +103,9 @@ type serverEvent struct {
 }
 
 type speaker struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	ID         string   `json:"id"`
+	Label      string   `json:"label"`
+	Confidence *float64 `json:"confidence,omitempty"`
 }
 
 type protocolError struct {
@@ -118,18 +126,22 @@ type recognitionJob struct {
 }
 
 type recognitionResult struct {
-	job        recognitionJob
-	transcript domain.SpeechTranscript
-	err        error
+	job              recognitionJob
+	transcript       domain.SpeechTranscript
+	embedding        []float32
+	diarizationError error
+	err              error
 }
 
 func NewSpeechStreamHandler(
 	service SpeechService,
+	diarization DiarizationService,
 	logger *slog.Logger,
 	policy SpeechStreamPolicy,
 ) *SpeechStreamHandler {
 	return &SpeechStreamHandler{
 		service:     service,
+		diarization: diarization,
 		logger:      logger,
 		policy:      policy,
 		slots:       make(chan struct{}, policy.MaxConnections),
@@ -309,6 +321,7 @@ func (handler *SpeechStreamHandler) processMessages(
 	silenceBytes := durationBytes(handler.policy.SilenceDuration)
 	maxSegmentBytes := durationBytes(handler.policy.MaxSegmentDuration)
 	results := make(chan recognitionResult, 1)
+	diarizationSession := handler.diarization.NewSession()
 
 	var segment []byte
 	var segmentStartedAt time.Time
@@ -324,12 +337,26 @@ func (handler *SpeechStreamHandler) processMessages(
 	startRecognition := func(job recognitionJob) {
 		inFlight = true
 		go func() {
-			transcript, err := handler.service.Transcribe(ctx, speechusecase.TranscribeInput{
-				WAV:      pcm16WAV(job.pcm),
-				Language: start.Language,
-			})
+			wav := pcm16WAV(job.pcm)
+			transcriptionResults := make(chan recognitionResult, 1)
+			go func() {
+				transcript, err := handler.service.Transcribe(ctx, speechusecase.TranscribeInput{
+					WAV:      wav,
+					Language: start.Language,
+				})
+				transcriptionResults <- recognitionResult{job: job, transcript: transcript, err: err}
+			}()
+
+			var embedding []float32
+			var diarizationError error
+			if job.final {
+				embedding, diarizationError = handler.diarization.Embedding(ctx, wav, job.pcm)
+			}
+			result := <-transcriptionResults
+			result.embedding = embedding
+			result.diarizationError = diarizationError
 			select {
-			case results <- recognitionResult{job: job, transcript: transcript, err: err}:
+			case results <- result:
 			case <-ctx.Done():
 			}
 		}()
@@ -443,14 +470,38 @@ func (handler *SpeechStreamHandler) processMessages(
 				}
 			} else if text := strings.TrimSpace(result.transcript.Text); text != "" {
 				serverSequence++
+				eventSpeaker := &speaker{ID: "speaker_pending", Label: "Речь"}
 				event := serverEvent{
 					Type:       "partial",
 					Sequence:   serverSequence,
 					Text:       text,
-					Speaker:    &speaker{ID: "speaker_1", Label: "Говорящий 1"},
+					Speaker:    eventSpeaker,
 					Confidence: result.transcript.Confidence,
 				}
 				if result.job.final {
+					identity := diarizationusecase.Identity{ID: "speaker_unknown", Label: "Говорящий"}
+					if result.diarizationError == nil {
+						assigned, assignError := diarizationSession.Assign(result.embedding)
+						if assignError == nil {
+							identity = assigned
+						} else {
+							result.diarizationError = assignError
+						}
+					}
+					if result.diarizationError != nil &&
+						!errors.Is(result.diarizationError, diarizationusecase.ErrInsufficientAudio) {
+						handler.logger.WarnContext(
+							ctx,
+							"speaker diarization unavailable",
+							"request_id", requestctx.RequestID(ctx),
+							"error", result.diarizationError,
+						)
+					}
+					event.Speaker = &speaker{
+						ID:         identity.ID,
+						Label:      identity.Label,
+						Confidence: identity.Confidence,
+					}
 					messageID, idErr := security.NewUUID()
 					if idErr != nil {
 						return fmt.Errorf("generate message id: %w", idErr)

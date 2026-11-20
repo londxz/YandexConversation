@@ -16,6 +16,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/londxz/HackatonYandex/backend/internal/domain"
+	speakerprovider "github.com/londxz/HackatonYandex/backend/internal/speaker"
+	diarizationusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/diarization"
 	speechusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/speech"
 )
 
@@ -102,10 +104,60 @@ func TestSpeechStreamRejectsOutOfOrderAudioChunk(t *testing.T) {
 	}
 }
 
+func TestSpeechStreamAssignsDifferentStableSpeakers(t *testing.T) {
+	service := &streamSpeechService{text: "реплика"}
+	embedder := &streamEmbeddingProvider{vectors: [][]float32{{1, 0}, {0, 1}, {0.99, 0.01}}}
+	handler := newTestSpeechStreamHandlerWithEmbedder(service, embedder)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	connection, _, err := websocket.Dial(ctx, websocketURL(server.URL), nil)
+	if err != nil {
+		t.Fatalf("websocket.Dial() error = %v", err)
+	}
+	defer connection.CloseNow()
+
+	writeTestJSON(t, ctx, connection, validStartMessage())
+	_ = readTestEvent(t, ctx, connection)
+
+	first := sendTestSegment(t, ctx, connection, 1)
+	second := sendTestSegment(t, ctx, connection, 3)
+	third := sendTestSegment(t, ctx, connection, 5)
+
+	if first.Speaker == nil || first.Speaker.ID != "speaker_1" {
+		t.Fatalf("first speaker = %#v", first.Speaker)
+	}
+	if second.Speaker == nil || second.Speaker.ID != "speaker_2" {
+		t.Fatalf("second speaker = %#v", second.Speaker)
+	}
+	if third.Speaker == nil || third.Speaker.ID != "speaker_1" {
+		t.Fatalf("third speaker = %#v", third.Speaker)
+	}
+}
+
 type streamSpeechService struct {
 	mu    sync.Mutex
 	text  string
 	calls [][]byte
+}
+
+type streamEmbeddingProvider struct {
+	mu      sync.Mutex
+	vectors [][]float32
+	calls   int
+}
+
+func (provider *streamEmbeddingProvider) Embed(
+	context.Context,
+	speakerprovider.EmbeddingRequest,
+) (speakerprovider.EmbeddingResult, error) {
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	vector := provider.vectors[provider.calls]
+	provider.calls++
+	return speakerprovider.EmbeddingResult{Vector: vector}, nil
 }
 
 func (service *streamSpeechService) Transcribe(
@@ -138,8 +190,26 @@ func (service *streamSpeechService) lastWAV() []byte {
 }
 
 func newTestSpeechStreamHandler(service SpeechService) *SpeechStreamHandler {
+	return newTestSpeechStreamHandlerWithEmbedder(
+		service,
+		&streamEmbeddingProvider{vectors: [][]float32{{1, 0}, {1, 0}, {1, 0}, {1, 0}}},
+	)
+}
+
+func newTestSpeechStreamHandlerWithEmbedder(
+	service SpeechService,
+	embedder speakerprovider.Provider,
+) *SpeechStreamHandler {
+	diarizationService := diarizationusecase.NewService(embedder, diarizationusecase.Policy{
+		EmbeddingTimeout:    time.Second,
+		MinimumAudio:        50 * time.Millisecond,
+		SimilarityThreshold: 0.75,
+		MaximumSpeakers:     8,
+		MaxConcurrent:       2,
+	})
 	return NewSpeechStreamHandler(
 		service,
+		diarizationService,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		SpeechStreamPolicy{
 			PartialInterval:    100 * time.Millisecond,
@@ -149,6 +219,34 @@ func newTestSpeechStreamHandler(service SpeechService) *SpeechStreamHandler {
 			MaxConnections:     2,
 		},
 	)
+}
+
+func sendTestSegment(
+	t *testing.T,
+	ctx context.Context,
+	connection *websocket.Conn,
+	firstSequence int64,
+) serverEvent {
+	t.Helper()
+	writeTestJSON(t, ctx, connection, clientAudioChunk{
+		Type:     "audio_chunk",
+		Sequence: firstSequence,
+		Data:     pcmChunk(2000, 1600),
+	})
+	writeTestJSON(t, ctx, connection, clientAudioChunk{
+		Type:     "audio_chunk",
+		Sequence: firstSequence + 1,
+		Data:     pcmChunk(0, 1600),
+	})
+	for {
+		event := readTestEvent(t, ctx, connection)
+		if event.Type == "final" {
+			return event
+		}
+		if event.Type != "partial" {
+			t.Fatalf("speech event type = %q, want partial or final", event.Type)
+		}
+	}
 }
 
 func validStartMessage() clientStart {

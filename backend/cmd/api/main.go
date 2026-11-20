@@ -17,12 +17,15 @@ import (
 	"github.com/londxz/HackatonYandex/backend/internal/observability"
 	"github.com/londxz/HackatonYandex/backend/internal/repository/postgres"
 	"github.com/londxz/HackatonYandex/backend/internal/security"
+	speakerprovider "github.com/londxz/HackatonYandex/backend/internal/speaker"
+	sherpaspeaker "github.com/londxz/HackatonYandex/backend/internal/speaker/sherpa"
 	speechprovider "github.com/londxz/HackatonYandex/backend/internal/speech"
 	whisperspeech "github.com/londxz/HackatonYandex/backend/internal/speech/whisper"
 	httptransport "github.com/londxz/HackatonYandex/backend/internal/transport/http"
 	"github.com/londxz/HackatonYandex/backend/internal/transport/http/handlers"
 	wstransport "github.com/londxz/HackatonYandex/backend/internal/transport/ws"
 	deviceusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/devices"
+	diarizationusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/diarization"
 	speechusecase "github.com/londxz/HackatonYandex/backend/internal/usecase/speech"
 )
 
@@ -96,6 +99,33 @@ func run() int {
 			MaxConcurrent:      appConfig.Speech.MaxConcurrent,
 		},
 	)
+	var speakerProvider speakerprovider.Provider = speakerprovider.UnavailableProvider{}
+	if appConfig.Diarization.Provider == "sherpa" {
+		speakerHTTPClient := &http.Client{
+			Timeout: appConfig.Diarization.EmbeddingTimeout + time.Second,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		speakerProvider, err = sherpaspeaker.NewClient(
+			appConfig.Diarization.EmbeddingEndpoint,
+			speakerHTTPClient,
+		)
+		if err != nil {
+			logger.Error("speaker embedding provider initialization failed", "error", err)
+			return 1
+		}
+	}
+	diarizationService := diarizationusecase.NewService(
+		speakerProvider,
+		diarizationusecase.Policy{
+			EmbeddingTimeout:    appConfig.Diarization.EmbeddingTimeout,
+			MinimumAudio:        appConfig.Diarization.MinimumAudio,
+			SimilarityThreshold: appConfig.Diarization.SimilarityThreshold,
+			MaximumSpeakers:     appConfig.Diarization.MaximumSpeakers,
+			MaxConcurrent:       appConfig.Diarization.MaxConcurrent,
+		},
+	)
 
 	healthHandler := handlers.NewHealthHandler(
 		pool,
@@ -111,6 +141,7 @@ func run() int {
 	)
 	speechStreamHandler := wstransport.NewSpeechStreamHandler(
 		speechService,
+		diarizationService,
 		logger,
 		wstransport.SpeechStreamPolicy{
 			PartialInterval:    appConfig.Speech.StreamPartialInterval,

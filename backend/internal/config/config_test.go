@@ -45,6 +45,11 @@ func TestLoadUsesProductionDefaults(t *testing.T) {
 		config.Speech.StreamMaxSegmentDuration != 15*time.Second {
 		t.Fatalf("unexpected speech stream timing: %#v", config.Speech)
 	}
+	if config.Diarization.Provider != "disabled" ||
+		config.Diarization.SimilarityThreshold != 0.72 ||
+		config.Diarization.MinimumAudio != time.Second {
+		t.Fatalf("unexpected diarization defaults: %#v", config.Diarization)
+	}
 }
 
 func TestLoadRejectsMissingDatabaseURL(t *testing.T) {
@@ -166,6 +171,39 @@ func TestLoadRejectsStreamSegmentLongerThanBatchLimit(t *testing.T) {
 	}
 }
 
+func TestLoadAllowsConfiguredSherpaDiarization(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("DIARIZATION_PROVIDER", "sherpa")
+	t.Setenv("SPEAKER_EMBEDDING_ENDPOINT", "http://speaker-embedder:8090/v1/embedding")
+	t.Setenv("DIARIZATION_SIMILARITY_THRESHOLD", "0.81")
+
+	config, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if config.Diarization.Provider != "sherpa" || config.Diarization.SimilarityThreshold != 0.81 {
+		t.Fatalf("Diarization config = %#v", config.Diarization)
+	}
+}
+
+func TestLoadRejectsInvalidDiarizationConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:password@localhost:5432/razgovor")
+	setTestSecrets(t)
+	t.Setenv("DIARIZATION_PROVIDER", "sherpa")
+	t.Setenv("SPEAKER_EMBEDDING_ENDPOINT", "speaker-embedder:8090")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want invalid diarization endpoint error")
+	}
+
+	t.Setenv("SPEAKER_EMBEDDING_ENDPOINT", "http://speaker-embedder:8090/v1/embedding")
+	t.Setenv("DIARIZATION_SIMILARITY_THRESHOLD", "1.2")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want invalid similarity threshold error")
+	}
+}
+
 func setTestSecrets(t *testing.T) {
 	t.Helper()
 	t.Setenv("TOKEN_PEPPER_BASE64", "bG9jYWwtdG9rZW4tcGVwcGVyLTMyLWJ5dGUtdmFsdWU=")
@@ -178,4 +216,11 @@ func setTestSecrets(t *testing.T) {
 	t.Setenv("SPEECH_STREAM_MAX_SEGMENT_DURATION", "")
 	t.Setenv("SPEECH_STREAM_MAX_CHUNK_BYTES", "")
 	t.Setenv("SPEECH_STREAM_MAX_CONNECTIONS", "")
+	t.Setenv("DIARIZATION_PROVIDER", "")
+	t.Setenv("SPEAKER_EMBEDDING_ENDPOINT", "")
+	t.Setenv("DIARIZATION_TIMEOUT", "")
+	t.Setenv("DIARIZATION_MIN_AUDIO_DURATION", "")
+	t.Setenv("DIARIZATION_SIMILARITY_THRESHOLD", "")
+	t.Setenv("DIARIZATION_MAX_SPEAKERS", "")
+	t.Setenv("DIARIZATION_MAX_CONCURRENT_REQUESTS", "")
 }
