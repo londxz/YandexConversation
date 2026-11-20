@@ -10,8 +10,9 @@ curl -i http://localhost:8080/v1/health
 ```
 
 The first build compiles the pinned `whisper.cpp` release and downloads the
-multilingual `base` model. The local stack then starts PostgreSQL, migrations,
-the non-public Whisper sidecar, and the Go API without any cloud credentials.
+multilingual `base` model. It also downloads the speaker embedding model for
+the `sherpa-onnx` service. The local stack then starts PostgreSQL, migrations,
+Whisper, the speaker embedder, and the Go API without any cloud credentials.
 
 Compose exposes PostgreSQL on `localhost:5433` by default to avoid colliding
 with a locally installed PostgreSQL. Override `POSTGRES_PORT` or `API_PORT`
@@ -76,8 +77,18 @@ receive `429 speech_busy` with `Retry-After: 1`.
 Realtime audio is segmented in memory on silence or the configured maximum
 segment duration. A rolling segment is sent to the same private `whisper.cpp`
 sidecar for partial and final recognition. Raw chunks and transcripts are not
-logged or persisted by the backend. The current v1 stream labels recognized
-segments as `Говорящий 1`; true speaker diarization is a separate next stage.
+logged or persisted by the Go gateway. For final segments, the separate
+`sherpa-onnx` service computes speaker embeddings. The gateway compares them
+within the current WebSocket session and assigns labels such as `Говорящий 1`
+and `Говорящий 2`. Partial events use the neutral label `Речь`. If speaker
+attribution is unavailable or a segment is too short, the transcript still
+arrives with the label `Говорящий`.
+
+Speaker attribution assigns one speaker per segment; it does not separate
+overlapping voices or speaker changes within a segment. Speaker clusters are
+held in memory for one WebSocket connection and reset on reconnect.
+`DIARIZATION_PROVIDER=disabled` disables speaker attribution without disabling
+speech recognition. Other diarization settings are listed in `.env.example`.
 
 The default flow is backend-first: iOS sends the completed push-to-talk WAV to
 the authenticated Go endpoint, which validates it and calls the private
